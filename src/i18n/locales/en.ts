@@ -15,7 +15,8 @@ export default {
     no: 'No',
     success: 'Success',
     error: 'Error',
-    warning: 'Warning'
+    warning: 'Warning',
+    retry: 'Retry'
   },
   nav: {
     dashboard: 'Dashboard',
@@ -76,12 +77,13 @@ export default {
     domainName: 'Domain Name',
     expiresAt: 'Expires At',
     addDomainTitle: 'Add Domain',
-    addDomainPlaceholder: 'e.g., example.com',
+    addDomainPlaceholder: 'Enter subdomain name',
+    selectSuffix: 'Select domain suffix',
     purpose: 'Purpose',
     purposePlaceholder: 'Describe the purpose of this domain',
     domainPurpose: 'Domain Purpose',
     enterDomain: 'Please enter a domain',
-    domainNotAllowed: 'This domain is not in the allowed list',
+    domainNotAllowed: 'This domain suffix is not in the allowed list',
     domainExists: 'Domain already exists',
     addFailed: 'Failed to add domain, please try again',
     approved: 'Approved',
@@ -89,7 +91,8 @@ export default {
     approve: 'Approve',
     reject: 'Reject',
     rejectionReason: 'Rejection Reason',
-    enterRejectionReason: 'Enter reason for rejection (optional)'
+    enterRejectionReason: 'Enter reason for rejection (optional)',
+    suffixRequired: 'Please select a domain suffix'
   },
   dns: {
     title: 'DNS Records',
@@ -116,7 +119,13 @@ export default {
       changeRole: 'Change Role',
       deleteUser: 'Delete User',
       deleteConfirm: 'Are you sure you want to delete this user?',
-      cannotDeleteSelf: 'You cannot delete yourself'
+      cannotDeleteSelf: 'You cannot delete yourself',
+      loadFailed: 'Failed to load user list',
+      changePassword: 'Change Password',
+      newPassword: 'New Password',
+      confirmNewPassword: 'Confirm New Password',
+      passwordChanged: 'Password changed successfully',
+      passwordChangeFailed: 'Failed to change password'
     },
     domains: {
       title: 'Domain Assignment',
@@ -136,8 +145,8 @@ export default {
       dnspodConfig: 'DNSPod Configuration',
       dnspodDesc: 'Create a Token in DNSPod and enter it below.',
       dnspodFormat: 'Token format: ID,TOKEN',
-      allowedDomains: 'Allowed Domains',
-      allowedDomainsDesc: 'Enter allowed domains, one per line. Users can only apply for these domains.',
+      domainSuffixes: 'Allowed Domain Suffixes',
+      domainSuffixesDesc: 'Enter allowed domain suffixes, one per line. Users can apply for subdomains of these suffixes (e.g., subdomain.example.com).',
       cloudflareConfig: 'Cloudflare Configuration',
       cloudflareDesc: 'Enter your Cloudflare Turnstile site key and secret key.',
       turnstileSiteKey: 'Turnstile Site Key',

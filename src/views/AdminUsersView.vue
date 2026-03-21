@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 import Card from '@/components/Card.vue'
 import Button from '@/components/Button.vue'
 import Modal from '@/components/Modal.vue'
+import InputField from '@/components/InputField.vue'
 import type { User } from '@/types'
 
 const userStore = useUserStore()
@@ -13,8 +14,13 @@ const authStore = useAuthStore()
 const { t } = useI18n()
 
 const showEditModal = ref(false)
+const showPasswordModal = ref(false)
 const editingUser = ref<User | null>(null)
 const selectedRole = ref<'user' | 'admin'>('user')
+const newPassword = ref('')
+const confirmPassword = ref('')
+const passwordError = ref('')
+const passwordSuccess = ref(false)
 
 onMounted(() => {
   userStore.fetchUsers()
@@ -26,12 +32,50 @@ function openEditModal(user: User) {
   showEditModal.value = true
 }
 
+function openPasswordModal(user: User) {
+  editingUser.value = user
+  newPassword.value = ''
+  confirmPassword.value = ''
+  passwordError.value = ''
+  passwordSuccess.value = false
+  showPasswordModal.value = true
+}
+
 async function handleUpdateRole() {
   if (!editingUser.value) return
   const success = await userStore.updateUser(editingUser.value.id, { role: selectedRole.value })
   if (success) {
     showEditModal.value = false
     editingUser.value = null
+  }
+}
+
+async function handleUpdatePassword() {
+  passwordError.value = ''
+  passwordSuccess.value = false
+
+  if (!newPassword.value || newPassword.value.length < 6) {
+    passwordError.value = t('auth.passwordTooShort')
+    return
+  }
+
+  if (newPassword.value !== confirmPassword.value) {
+    passwordError.value = t('auth.passwordMismatch')
+    return
+  }
+
+  if (!editingUser.value) return
+
+  const success = await userStore.updatePassword(editingUser.value.id, newPassword.value)
+  if (success) {
+    passwordSuccess.value = true
+    setTimeout(() => {
+      showPasswordModal.value = false
+      newPassword.value = ''
+      confirmPassword.value = ''
+    }, 1500)
+  } else {
+    passwordError.value = t('admin.users.passwordChangeFailed')
   }
 }
 
@@ -54,6 +98,10 @@ async function handleDeleteUser(id: number) {
       </template>
 
       <div v-if="userStore.loading" class="loading">{{ t('common.loading') }}</div>
+      <div v-else-if="userStore.error" class="error-state">
+        <p>{{ userStore.error }}</p>
+        <Button @click="userStore.fetchUsers()">{{ t('common.retry') || 'Retry' }}</Button>
+      </div>
       <div v-else-if="userStore.users.length === 0" class="empty-state">
         <p>-</p>
       </div>
@@ -83,6 +131,9 @@ async function handleDeleteUser(id: number) {
               <Button size="sm" variant="secondary" @click="openEditModal(user)">
                 {{ t('common.edit') }}
               </Button>
+              <Button size="sm" variant="secondary" @click="openPasswordModal(user)">
+                {{ t('admin.users.changePassword') }}
+              </Button>
               <Button size="sm" variant="danger" @click="handleDeleteUser(user.id)" :disabled="user.id === authStore.user?.id">
                 {{ t('common.delete') }}
               </Button>
@@ -108,6 +159,30 @@ async function handleDeleteUser(id: number) {
         </div>
       </div>
     </Modal>
+
+    <Modal v-model:show="showPasswordModal" :title="t('admin.users.changePassword')">
+      <div class="edit-form">
+        <p class="edit-info">{{ t('admin.users.changePassword') }}: <strong>{{ editingUser?.username }}</strong></p>
+        <InputField
+          v-model="newPassword"
+          type="password"
+          :label="t('admin.users.newPassword')"
+          :placeholder="t('auth.passwordPlaceholder')"
+        />
+        <InputField
+          v-model="confirmPassword"
+          type="password"
+          :label="t('admin.users.confirmNewPassword')"
+          :placeholder="t('auth.confirmPasswordPlaceholder')"
+        />
+        <p v-if="passwordError" class="error">{{ passwordError }}</p>
+        <p v-if="passwordSuccess" class="success">{{ t('admin.users.passwordChanged') }}</p>
+        <div class="form-actions">
+          <Button variant="secondary" @click="showPasswordModal = false">{{ t('common.cancel') }}</Button>
+          <Button @click="handleUpdatePassword" :disabled="passwordSuccess">{{ t('common.save') }}</Button>
+        </div>
+      </div>
+    </Modal>
   </div>
 </template>
 
@@ -117,10 +192,23 @@ async function handleDeleteUser(id: number) {
   margin: 0 auto;
 }
 
-.loading, .empty-state {
+.loading, .empty-state, .error-state {
   text-align: center;
   padding: 60px;
   color: var(--color-text-secondary);
+}
+
+.error-state {
+  color: var(--color-danger);
+}
+
+.error-state p {
+  margin-bottom: 16px;
+}
+
+.success {
+  color: var(--color-accent);
+  font-size: 14px;
 }
 
 .users-table {

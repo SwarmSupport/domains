@@ -2,9 +2,20 @@ import { createI18n } from 'vue-i18n'
 import zh from './locales/zh'
 import en from './locales/en'
 
+// Detect browser language and default to English for unknown languages
+function getBrowserLocale(): string {
+  const browserLocale = navigator.language || (navigator as any).userLanguage || 'en'
+  // Check if browser locale starts with 'zh'
+  if (browserLocale.toLowerCase().startsWith('zh')) {
+    return 'zh'
+  }
+  // Default to English for all other languages
+  return 'en'
+}
+
 const i18n = createI18n({
   legacy: false,
-  locale: localStorage.getItem('locale') || 'zh',
+  locale: localStorage.getItem('locale') || getBrowserLocale(),
   fallbackLocale: 'en',
   messages: {
     zh,

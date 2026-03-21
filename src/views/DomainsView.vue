@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDomainStore } from '@/stores/domains'
 import { useI18n } from 'vue-i18n'
+import { settingApi } from '@/api'
 import Card from '@/components/Card.vue'
 import Button from '@/components/Button.vue'
 import InputField from '@/components/InputField.vue'
@@ -15,13 +16,24 @@ const domainStore = useDomainStore()
 const { t } = useI18n()
 
 const showAddModal = ref(false)
-const newDomain = ref('')
+const newSubdomain = ref('')
+const selectedSuffix = ref('')
 const newPurpose = ref('')
 const addError = ref('')
 const filter = ref<'all' | 'active' | 'pending' | 'rejected'>('all')
+const availableSuffixes = ref<string[]>([])
 
-onMounted(() => {
+onMounted(async () => {
   domainStore.fetchDomains()
+  // Fetch available domain suffixes
+  try {
+    const { data } = await settingApi.get('DOMAIN_SUFFIXES')
+    if (data.success && data.data?.value) {
+      availableSuffixes.value = data.data.value.split('\n').map(s => s.trim()).filter(s => s.length > 0)
+    }
+  } catch (e) {
+    console.error('Failed to load domain suffixes')
+  }
 })
 
 const filteredDomains = computed(() => {
@@ -32,14 +44,21 @@ const filteredDomains = computed(() => {
 
 async function handleAddDomain() {
   addError.value = ''
-  if (!newDomain.value) {
+  if (!selectedSuffix.value) {
+    addError.value = t('domains.suffixRequired')
+    return
+  }
+  if (!newSubdomain.value) {
     addError.value = t('domains.enterDomain')
     return
   }
-  const success = await domainStore.createDomain(newDomain.value, newPurpose.value)
+  // Combine subdomain and suffix (e.g., "mysite" + "example.com" = "mysite.example.com")
+  const fullDomain = `${newSubdomain.value}.${selectedSuffix.value}`
+  const success = await domainStore.createDomain(fullDomain, newPurpose.value)
   if (success) {
     showAddModal.value = false
-    newDomain.value = ''
+    newSubdomain.value = ''
+    selectedSuffix.value = ''
     newPurpose.value = ''
   } else {
     addError.value = t('domains.addFailed')
@@ -114,11 +133,22 @@ async function handleDelete(id: number) {
 
     <Modal v-model:show="showAddModal" :title="t('domains.addDomainTitle')">
       <form @submit.prevent="handleAddDomain" class="add-form">
+        <div class="suffix-select">
+          <label>{{ t('domains.selectSuffix') }}</label>
+          <select v-model="selectedSuffix" class="select-field">
+            <option value="" disabled>{{ t('domains.selectSuffix') }}</option>
+            <option v-for="suffix in availableSuffixes" :key="suffix" :value="suffix">{{ suffix }}</option>
+          </select>
+        </div>
         <InputField
-          v-model="newDomain"
+          v-model="newSubdomain"
           :label="t('domains.domainName')"
           :placeholder="t('domains.addDomainPlaceholder')"
         />
+        <div v-if="selectedSuffix && newSubdomain" class="full-domain-preview">
+          <span class="preview-label">{{ t('domains.domainName') }}:</span>
+          <span class="preview-value">{{ newSubdomain }}.{{ selectedSuffix }}</span>
+        </div>
         <InputField
           v-model="newPurpose"
           :label="t('domains.domainPurpose')"
@@ -320,6 +350,48 @@ async function handleDelete(id: number) {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.suffix-select {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.suffix-select label {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.select-field {
+  padding: 12px 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: 14px;
+}
+
+.select-field:focus {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.full-domain-preview {
+  padding: 12px 16px;
+  background: rgba(0, 212, 170, 0.1);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+}
+
+.preview-label {
+  color: var(--color-text-secondary);
+  margin-right: 8px;
+}
+
+.preview-value {
+  color: var(--color-accent);
+  font-weight: 500;
 }
 
 .error {

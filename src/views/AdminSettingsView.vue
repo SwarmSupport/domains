@@ -10,7 +10,7 @@ import Toggle from '@/components/Toggle.vue'
 const { t } = useI18n()
 
 const dnspodToken = ref('')
-const allowedDomains = ref('')
+const domainSuffixes = ref('')
 const turnstileEnabled = ref(false)
 const turnstileSiteKey = ref('')
 const turnstileSecretKey = ref('')
@@ -23,9 +23,9 @@ const saved = ref(false)
 
 onMounted(async () => {
   try {
-    const [dnspod, allowed, turnstileEn, turnstileSite, turnstileSecret, emailEn, resendKey, resendDom, from] = await Promise.all([
+    const [dnspod, suffixes, turnstileEn, turnstileSite, turnstileSecret, emailEn, resendKey, resendDom, from] = await Promise.all([
       settingApi.get('DNSPOD_TOKEN'),
-      settingApi.get('ALLOWED_DOMAINS'),
+      settingApi.get('DOMAIN_SUFFIXES'),
       settingApi.get('TURNSTILE_ENABLED'),
       settingApi.get('TURNSTILE_SITE_KEY'),
       settingApi.get('TURNSTILE_SECRET_KEY'),
@@ -36,7 +36,7 @@ onMounted(async () => {
     ])
 
     if (dnspod.data.success && dnspod.data.data) dnspodToken.value = dnspod.data.data.value
-    if (allowed.data.success && allowed.data.data) allowedDomains.value = allowed.data.data.value
+    if (suffixes.data.success && suffixes.data.data) domainSuffixes.value = suffixes.data.data.value
     if (turnstileEn.data.success && turnstileEn.data.data) turnstileEnabled.value = turnstileEn.data.data.value !== 'false' && turnstileEn.data.data.value !== '0'
     if (turnstileSite.data.success && turnstileSite.data.data) turnstileSiteKey.value = turnstileSite.data.data.value
     if (turnstileSecret.data.success && turnstileSecret.data.data) turnstileSecretKey.value = turnstileSecret.data.data.value
@@ -55,7 +55,7 @@ async function handleSave() {
   try {
     await Promise.all([
       settingApi.set('DNSPOD_TOKEN', dnspodToken.value),
-      settingApi.set('ALLOWED_DOMAINS', allowedDomains.value),
+      settingApi.set('DOMAIN_SUFFIXES', domainSuffixes.value),
       settingApi.set('TURNSTILE_ENABLED', turnstileEnabled.value ? 'true' : 'false'),
       settingApi.set('TURNSTILE_SITE_KEY', turnstileSiteKey.value),
       settingApi.set('TURNSTILE_SECRET_KEY', turnstileSecretKey.value),
@@ -94,14 +94,14 @@ async function handleSave() {
         </div>
 
         <div class="setting-section">
-          <h4>{{ t('admin.settings.allowedDomains') }}</h4>
+          <h4>{{ t('admin.settings.domainSuffixes') }}</h4>
           <p class="setting-desc">
-            {{ t('admin.settings.allowedDomainsDesc') }}
+            {{ t('admin.settings.domainSuffixesDesc') }}
           </p>
           <textarea
-            v-model="allowedDomains"
+            v-model="domainSuffixes"
             class="textarea-field"
-            :placeholder="'example.com\n*.example.org'"
+            :placeholder="'example.com\nanother.org'"
             rows="5"
           ></textarea>
         </div>

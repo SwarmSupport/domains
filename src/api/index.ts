@@ -38,6 +38,7 @@ export const authApi = {
 export const userApi = {
   getList: () => api.get<ApiResponse<User[]>>('/users'),
   update: (id: number, data: Partial<User>) => api.put<ApiResponse>(`/users/${id}`, data),
+  updatePassword: (id: number, password: string) => api.put<ApiResponse>(`/users/${id}/password`, { password }),
   delete: (id: number) => api.delete<ApiResponse>(`/users/${id}`)
 }
 

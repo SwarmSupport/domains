@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useI18n } from 'vue-i18n'
 import { settingApi } from '@/api'
+import { setLocale, getLocale } from '@/i18n'
 import InputField from '@/components/InputField.vue'
 import Button from '@/components/Button.vue'
 import Turnstile from '@/components/Turnstile.vue'
@@ -20,6 +21,7 @@ const turnstileToken = ref('')
 const turnstileSiteKey = ref('')
 const error = ref('')
 const successMessage = ref('')
+const currentLocale = ref(getLocale())
 
 onMounted(async () => {
   try {
@@ -31,6 +33,11 @@ onMounted(async () => {
     console.error('Failed to load Turnstile site key')
   }
 })
+
+function switchLanguage(lang: 'zh' | 'en') {
+  setLocale(lang)
+  currentLocale.value = lang
+}
 
 async function handleRegister() {
   error.value = ''
@@ -67,6 +74,21 @@ async function handleRegister() {
 
 <template>
   <div class="auth-page">
+    <div class="language-switcher">
+      <button
+        :class="['lang-btn', { active: currentLocale === 'zh' }]"
+        @click="switchLanguage('zh')"
+      >
+        中文
+      </button>
+      <button
+        :class="['lang-btn', { active: currentLocale === 'en' }]"
+        @click="switchLanguage('en')"
+      >
+        EN
+      </button>
+    </div>
+
     <div class="auth-container">
       <div class="auth-header">
         <div class="logo">
@@ -135,6 +157,37 @@ async function handleRegister() {
   justify-content: center;
   padding: 24px;
   background: linear-gradient(135deg, var(--color-bg) 0%, var(--color-primary) 100%);
+}
+
+.language-switcher {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  display: flex;
+  gap: 8px;
+  z-index: 100;
+}
+
+.lang-btn {
+  padding: 8px 16px;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.lang-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+
+.lang-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
 }
 
 .auth-container {

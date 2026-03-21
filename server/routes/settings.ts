@@ -21,9 +21,9 @@ router.post('/', adminMiddleware, (req, res) => {
     return res.status(400).json({ success: false, error: 'Key is required' })
   }
 
+  // Use INSERT OR REPLACE for SQLite upsert
   db.prepare(`
-    INSERT INTO settings (key, value) VALUES (?, ?)
-    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)
   `).run(key, value || '')
 
   res.json({ success: true })

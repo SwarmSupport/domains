@@ -6,14 +6,21 @@ import type { User } from '@/types'
 export const useUserStore = defineStore('users', () => {
   const users = ref<User[]>([])
   const loading = ref(false)
+  const error = ref<string | null>(null)
 
   async function fetchUsers() {
     loading.value = true
+    error.value = null
     try {
       const { data } = await userApi.getList()
       if (data.success && data.data) {
         users.value = data.data
+      } else {
+        error.value = data.error || 'Failed to load users'
       }
+    } catch (e) {
+      error.value = 'Failed to load users'
+      console.error('Failed to fetch users:', e)
     } finally {
       loading.value = false
     }
@@ -38,6 +45,15 @@ export const useUserStore = defineStore('users', () => {
     }
   }
 
+  async function updatePassword(id: number, password: string) {
+    try {
+      const { data } = await userApi.updatePassword(id, password)
+      return data.success
+    } catch {
+      return false
+    }
+  }
+
   async function deleteUser(id: number) {
     try {
       const { data } = await userApi.delete(id)
@@ -54,8 +70,10 @@ export const useUserStore = defineStore('users', () => {
   return {
     users,
     loading,
+    error,
     fetchUsers,
     updateUser,
+    updatePassword,
     deleteUser
   }
 })

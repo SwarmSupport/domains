@@ -15,7 +15,8 @@ export default {
     no: '否',
     success: '成功',
     error: '错误',
-    warning: '警告'
+    warning: '警告',
+    retry: '重试'
   },
   nav: {
     dashboard: '仪表盘',
@@ -76,12 +77,13 @@ export default {
     domainName: '域名',
     expiresAt: '到期时间',
     addDomainTitle: '添加域名',
-    addDomainPlaceholder: '例如: example.com',
+    addDomainPlaceholder: '输入子域名名称',
+    selectSuffix: '选择域名后缀',
     purpose: '用途',
     purposePlaceholder: '请描述此域名的用途',
     domainPurpose: '域名用途',
     enterDomain: '请输入域名',
-    domainNotAllowed: '该域名不在允许列表中',
+    domainNotAllowed: '该域名后缀不在允许列表中',
     domainExists: '域名已存在',
     addFailed: '添加失败，请稍后重试',
     approved: '已通过',
@@ -89,7 +91,8 @@ export default {
     approve: '通过',
     reject: '拒绝',
     rejectionReason: '拒绝原因',
-    enterRejectionReason: '请输入拒绝原因（选填）'
+    enterRejectionReason: '请输入拒绝原因（选填）',
+    suffixRequired: '请选择域名后缀'
   },
   dns: {
     title: 'DNS 记录',
@@ -116,7 +119,13 @@ export default {
       changeRole: '修改角色',
       deleteUser: '删除用户',
       deleteConfirm: '确定要删除这个用户吗？',
-      cannotDeleteSelf: '您不能删除自己'
+      cannotDeleteSelf: '您不能删除自己',
+      loadFailed: '加载用户列表失败',
+      changePassword: '修改密码',
+      newPassword: '新密码',
+      confirmNewPassword: '确认新密码',
+      passwordChanged: '密码修改成功',
+      passwordChangeFailed: '密码修改失败'
     },
     domains: {
       title: '域名分配',
@@ -136,8 +145,8 @@ export default {
       dnspodConfig: 'DNSPod 配置',
       dnspodDesc: '在 DNSPod 创建 Token 并填入下方输入框。',
       dnspodFormat: 'Token 格式: ID,TOKEN',
-      allowedDomains: '允许注册的域名',
-      allowedDomainsDesc: '输入允许注册的域名，每行一个。用户只能申请这些域名。',
+      domainSuffixes: '允许的域名后缀',
+      domainSuffixesDesc: '输入允许的域名后缀，每行一个。用户可以申请这些后缀的子域名（如 subdomain.example.com）。',
       cloudflareConfig: 'Cloudflare 配置',
       cloudflareDesc: '输入您的 Cloudflare Turnstile site key 和 secret key。',
       turnstileSiteKey: 'Turnstile Site Key',

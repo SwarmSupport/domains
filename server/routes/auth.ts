@@ -7,6 +7,11 @@ import { sendVerificationEmail } from '../utils/email'
 
 const router = Router()
 
+// Email validation regex
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Username validation: alphanumeric and underscore only, 3-20 chars
+const USERNAME_REGEX = /^[a-zA-Z0-9_]{3,20}$/
+
 function getSetting(key: string): string | null {
   const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
   return setting?.value || null
@@ -28,8 +33,14 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Please fill in all fields' })
   }
 
-  if (username.length < 3 || username.length > 20) {
-    return res.status(400).json({ success: false, error: 'Username must be 3-20 characters' })
+  // Validate email format
+  if (!EMAIL_REGEX.test(email)) {
+    return res.status(400).json({ success: false, error: 'Invalid email format' })
+  }
+
+  // Validate username format
+  if (!USERNAME_REGEX.test(username)) {
+    return res.status(400).json({ success: false, error: 'Username must be 3-20 alphanumeric characters or underscore' })
   }
 
   if (password.length < 6) {
@@ -51,7 +62,7 @@ router.post('/register', async (req, res) => {
   const result = db.prepare(`
     INSERT INTO users (username, email, password, role, email_verified)
     VALUES (?, ?, ?, 'user', ?)
-  `).run(username, email, hashedPassword, isEmailVerificationRequired() ? 0 : 1)
+  `).run(username, email.toLowerCase(), hashedPassword, isEmailVerificationRequired() ? 0 : 1)
 
   const userId = result.lastInsertRowid as number
 
@@ -83,13 +94,19 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Please fill in all fields' })
   }
 
+  // Validate email format
+  if (!EMAIL_REGEX.test(email)) {
+    return res.status(400).json({ success: false, error: 'Invalid email format' })
+  }
+
   // Verify Turnstile
   const turnstileValid = await verifyTurnstile(turnstileToken || '')
   if (!turnstileValid) {
     return res.status(400).json({ success: false, error: 'Turnstile verification failed' })
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any
+  // Use case-insensitive email lookup
+  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase()) as any
   if (!user || !bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ success: false, error: 'Invalid email or password' })
   }

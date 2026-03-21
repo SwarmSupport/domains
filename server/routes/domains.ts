@@ -11,23 +11,36 @@ function getSetting(key: string): string | null {
   return setting?.value || null
 }
 
-function isDomainAllowed(domainName: string): boolean {
-  const allowedDomainsSetting = getSetting('ALLOWED_DOMAINS')
-  if (!allowedDomainsSetting) {
-    return true // If not configured, allow all
+function getDomainSuffixes(): string[] {
+  const setting = getSetting('DOMAIN_SUFFIXES')
+  if (!setting) {
+    return []
+  }
+  return setting.split('\n').map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+}
+
+function isSubdomainAllowed(subdomainName: string): { valid: boolean; error?: string } {
+  const suffixes = getDomainSuffixes()
+
+  if (suffixes.length === 0) {
+    return { valid: true } // If not configured, allow all
   }
 
-  const allowedDomains = allowedDomainsSetting.split('\n').map(d => d.trim().toLowerCase())
-  const domainLower = domainName.toLowerCase()
+  // Subdomain must be like: subdomain1.example.com
+  // Where example.com is in the allowed suffixes list
+  const parts = subdomainName.toLowerCase().split('.')
+  if (parts.length < 2) {
+    return { valid: false, error: 'Invalid subdomain format' }
+  }
 
-  // Check if domain matches exactly or has allowed TLD
-  return allowedDomains.some(allowed => {
-    if (allowed.startsWith('*.')) {
-      const tld = allowed.substring(2)
-      return domainLower.endsWith(tld)
+  // Check if the domain ends with any of the allowed suffixes
+  for (const suffix of suffixes) {
+    if (subdomainName.endsWith('.' + suffix) || subdomainName === suffix) {
+      return { valid: true }
     }
-    return domainLower === allowed || domainLower.endsWith('.' + allowed)
-  })
+  }
+
+  return { valid: false, error: 'Domain suffix not allowed' }
 }
 
 router.use(authMiddleware)
@@ -63,9 +76,10 @@ router.post('/', authMiddleware, (req: AuthRequest, res) => {
     return res.status(400).json({ success: false, error: 'Please enter a domain' })
   }
 
-  // Validate against allowed domains
-  if (!isDomainAllowed(name)) {
-    return res.status(400).json({ success: false, error: 'This domain is not in the allowed list' })
+  // Validate subdomain against allowed suffixes
+  const validation = isSubdomainAllowed(name)
+  if (!validation.valid) {
+    return res.status(400).json({ success: false, error: validation.error || 'Domain not allowed' })
   }
 
   const existing = db.prepare('SELECT id FROM domains WHERE name = ?').get(name)

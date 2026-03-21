@@ -10,34 +10,35 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
+  const isEmailVerified = computed(() => user.value?.email_verified === 1)
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string, turnstileToken?: string) {
     loading.value = true
     try {
-      const { data } = await authApi.login({ email, password })
+      const { data } = await authApi.login({ email, password, turnstileToken })
       if (data.success && data.data) {
         token.value = data.data.token
         user.value = data.data.user
         localStorage.setItem('token', data.data.token)
-        return true
+        return { success: true }
       }
-      return false
+      if (data.needsVerification) {
+        return { success: false, needsVerification: true }
+      }
+      return { success: false, error: data.error }
     } finally {
       loading.value = false
     }
   }
 
-  async function register(username: string, email: string, password: string) {
+  async function register(username: string, email: string, password: string, turnstileToken?: string) {
     loading.value = true
     try {
-      const { data } = await authApi.register({ username, email, password, confirmPassword: password })
-      if (data.success && data.data) {
-        token.value = data.data.token
-        user.value = data.data.user
-        localStorage.setItem('token', data.data.token)
-        return true
+      const { data } = await authApi.register({ username, email, password, confirmPassword: password, turnstileToken })
+      if (data.success) {
+        return { success: true, message: data.data?.message || 'Registration successful' }
       }
-      return false
+      return { success: false, error: data.error }
     } finally {
       loading.value = false
     }
@@ -67,6 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     isLoggedIn,
     isAdmin,
+    isEmailVerified,
     login,
     register,
     fetchUser,

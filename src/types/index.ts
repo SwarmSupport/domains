@@ -3,6 +3,7 @@ export interface User {
   username: string
   email: string
   role: 'user' | 'admin'
+  email_verified?: number
   created_at: string
 }
 
@@ -11,7 +12,10 @@ export interface Domain {
   name: string
   user_id: number | null
   username?: string
-  status: 'pending' | 'active' | 'suspended'
+  user_email?: string
+  purpose?: string
+  status: 'pending' | 'active' | 'suspended' | 'rejected'
+  rejection_reason?: string
   expires_at: string
   dnspod_domain_id: string | null
   created_at: string
@@ -33,6 +37,7 @@ export interface DnsRecord {
 export interface LoginForm {
   email: string
   password: string
+  turnstileToken?: string
 }
 
 export interface RegisterForm {
@@ -40,6 +45,7 @@ export interface RegisterForm {
   email: string
   password: string
   confirmPassword: string
+  turnstileToken?: string
 }
 
 export interface ApiResponse<T = any> {
@@ -47,6 +53,7 @@ export interface ApiResponse<T = any> {
   message?: string
   data?: T
   error?: string
+  needsVerification?: boolean
 }
 
 export interface Setting {

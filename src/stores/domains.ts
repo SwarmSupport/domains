@@ -24,10 +24,10 @@ export const useDomainStore = defineStore('domains', () => {
     }
   }
 
-  async function createDomain(name: string) {
+  async function createDomain(name: string, purpose?: string) {
     loading.value = true
     try {
-      const { data } = await domainApi.create(name)
+      const { data } = await domainApi.create(name, purpose)
       if (data.success && data.data) {
         domains.value.unshift(data.data)
         return true
@@ -51,9 +51,22 @@ export const useDomainStore = defineStore('domains', () => {
     }
   }
 
-  async function assignDomain(id: number, userId: number) {
+  async function approveDomain(id: number, userId: number) {
     try {
-      const { data } = await domainApi.assign(id, userId)
+      const { data } = await domainApi.approve(id, userId)
+      if (data.success) {
+        await fetchDomains()
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  async function rejectDomain(id: number, reason?: string) {
+    try {
+      const { data } = await domainApi.reject(id, reason)
       if (data.success) {
         await fetchDomains()
         return true
@@ -129,7 +142,8 @@ export const useDomainStore = defineStore('domains', () => {
     fetchDomains,
     createDomain,
     deleteDomain,
-    assignDomain,
+    approveDomain,
+    rejectDomain,
     fetchRecords,
     createRecord,
     updateRecord,

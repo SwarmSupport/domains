@@ -13,6 +13,7 @@ export function initDatabase() {
       email TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
       role TEXT DEFAULT 'user',
+      email_verified INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -20,7 +21,9 @@ export function initDatabase() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
       user_id INTEGER,
+      purpose TEXT,
       status TEXT DEFAULT 'pending',
+      rejection_reason TEXT,
       expires_at DATETIME DEFAULT (datetime('now', '+1 year')),
       dnspod_domain_id TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -45,16 +48,34 @@ export function initDatabase() {
       key TEXT PRIMARY KEY,
       value TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS email_verification_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      email TEXT NOT NULL,
+      token TEXT NOT NULL UNIQUE,
+      expires_at DATETIME NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `)
 
   const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin')
   if (!adminExists) {
     const hashedPassword = bcrypt.hashSync('admin123', 10)
     db.prepare(`
-      INSERT INTO users (username, email, password, role)
-      VALUES (?, ?, ?, ?)
+      INSERT INTO users (username, email, password, role, email_verified)
+      VALUES (?, ?, ?, ?, 1)
     `).run('admin', 'admin@example.com', hashedPassword, 'admin')
     console.log('Default admin created: admin@example.com / admin123')
+  }
+
+  // Initialize default settings
+  const defaultSettings = [
+    ['TURNSTILE_ENABLED', 'false'],
+    ['EMAIL_ENABLED', 'false'],
+  ]
+  const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
+  for (const [key, value] of defaultSettings) {
+    insertSetting.run(key, value)
   }
 }
 

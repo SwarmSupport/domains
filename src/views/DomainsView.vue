@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDomainStore } from '@/stores/domains'
+import { useI18n } from 'vue-i18n'
 import Card from '@/components/Card.vue'
 import Button from '@/components/Button.vue'
 import InputField from '@/components/InputField.vue'
@@ -11,11 +12,13 @@ import Modal from '@/components/Modal.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 const domainStore = useDomainStore()
+const { t } = useI18n()
 
 const showAddModal = ref(false)
 const newDomain = ref('')
+const newPurpose = ref('')
 const addError = ref('')
-const filter = ref<'all' | 'active' | 'pending'>('all')
+const filter = ref<'all' | 'active' | 'pending' | 'rejected'>('all')
 
 onMounted(() => {
   domainStore.fetchDomains()
@@ -30,20 +33,21 @@ const filteredDomains = computed(() => {
 async function handleAddDomain() {
   addError.value = ''
   if (!newDomain.value) {
-    addError.value = '请输入域名'
+    addError.value = t('domains.enterDomain')
     return
   }
-  const success = await domainStore.createDomain(newDomain.value)
+  const success = await domainStore.createDomain(newDomain.value, newPurpose.value)
   if (success) {
     showAddModal.value = false
     newDomain.value = ''
+    newPurpose.value = ''
   } else {
-    addError.value = '添加失败，请稍后重试'
+    addError.value = t('domains.addFailed')
   }
 }
 
 async function handleDelete(id: number) {
-  if (confirm('确定要删除这个域名吗？')) {
+  if (confirm(t('common.delete') + '?')) {
     await domainStore.deleteDomain(id)
   }
 }
@@ -53,31 +57,32 @@ async function handleDelete(id: number) {
   <div class="domains-page">
     <div class="page-header">
       <div class="filter-tabs">
-        <button :class="['tab', { active: filter === 'all' }]" @click="filter = 'all'">全部</button>
-        <button :class="['tab', { active: filter === 'active' }]" @click="filter = 'active'">已解析</button>
-        <button :class="['tab', { active: filter === 'pending' }]" @click="filter = 'pending'">待审核</button>
+        <button :class="['tab', { active: filter === 'all' }]" @click="filter = 'all'">{{ t('domains.all') }}</button>
+        <button :class="['tab', { active: filter === 'active' }]" @click="filter = 'active'">{{ t('domains.active') }}</button>
+        <button :class="['tab', { active: filter === 'pending' }]" @click="filter = 'pending'">{{ t('domains.pending') }}</button>
+        <button :class="['tab', { active: filter === 'rejected' }]" @click="filter = 'rejected'">{{ t('domains.rejected') }}</button>
       </div>
       <Button @click="showAddModal = true">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
-        添加域名
+        {{ t('domains.addDomain') }}
       </Button>
     </div>
 
-    <div v-if="domainStore.loading" class="loading">加载中...</div>
+    <div v-if="domainStore.loading" class="loading">{{ t('common.loading') }}</div>
 
     <div v-else-if="filteredDomains.length === 0" class="empty-state">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <circle cx="12" cy="12" r="10"/>
         <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
       </svg>
-      <h3>暂无域名</h3>
-      <p>点击上方按钮添加您的第一个域名</p>
+      <h3>{{ t('domains.noDomains') }}</h3>
+      <p>{{ t('domains.noDomainsDesc') }}</p>
     </div>
 
     <div v-else class="domains-grid">
-      <Card v-for="domain in filteredDomains" :key="domain.id" customClass="domain-card" @click="router.push(`/dns/${domain.name}`)">
+      <Card v-for="domain in filteredDomains" :key="domain.id" customClass="domain-card" @click="domain.status === 'active' && router.push(`/dns/${domain.name}`)">
         <div class="domain-header">
           <div class="domain-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -86,11 +91,17 @@ async function handleDelete(id: number) {
             </svg>
           </div>
           <span class="domain-status" :class="domain.status">
-            {{ domain.status === 'active' ? '已解析' : domain.status === 'pending' ? '待审核' : '已暂停' }}
+            {{ domain.status === 'active' ? t('domains.active') : domain.status === 'pending' ? t('domains.pending') : domain.status === 'rejected' ? t('domains.rejected') : t('domains.suspended') }}
           </span>
         </div>
         <h3 class="domain-name">{{ domain.name }}</h3>
-        <p class="domain-meta">到期时间: {{ new Date(domain.expires_at).toLocaleDateString() }}</p>
+        <p class="domain-meta">{{ t('domains.expiresAt') }}: {{ new Date(domain.expires_at).toLocaleDateString() }}</p>
+        <div v-if="domain.purpose" class="domain-purpose">
+          <strong>{{ t('domains.purpose') }}:</strong> {{ domain.purpose }}
+        </div>
+        <div v-if="domain.status === 'rejected' && domain.rejection_reason" class="domain-rejection">
+          <strong>{{ t('domains.rejectionReason') }}:</strong> {{ domain.rejection_reason }}
+        </div>
         <div class="domain-actions" @click.stop>
           <button class="action-btn danger" @click="handleDelete(domain.id)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -101,17 +112,22 @@ async function handleDelete(id: number) {
       </Card>
     </div>
 
-    <Modal v-model:show="showAddModal" title="添加域名">
+    <Modal v-model:show="showAddModal" :title="t('domains.addDomainTitle')">
       <form @submit.prevent="handleAddDomain" class="add-form">
         <InputField
           v-model="newDomain"
-          label="域名"
-          placeholder="例如: example.com"
+          :label="t('domains.domainName')"
+          :placeholder="t('domains.addDomainPlaceholder')"
+        />
+        <InputField
+          v-model="newPurpose"
+          :label="t('domains.domainPurpose')"
+          :placeholder="t('domains.purposePlaceholder')"
         />
         <p v-if="addError" class="error">{{ addError }}</p>
         <div class="form-actions">
-          <Button variant="secondary" type="button" @click="showAddModal = false">取消</Button>
-          <Button type="submit" :loading="domainStore.loading">添加</Button>
+          <Button variant="secondary" type="button" @click="showAddModal = false">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :loading="domainStore.loading">{{ t('common.add') }}</Button>
         </div>
       </form>
     </Modal>
@@ -234,6 +250,11 @@ async function handleDelete(id: number) {
   color: var(--color-warning);
 }
 
+.domain-status.rejected {
+  background: rgba(255, 107, 107, 0.15);
+  color: var(--color-danger);
+}
+
 .domain-status.suspended {
   background: rgba(255, 107, 107, 0.15);
   color: var(--color-danger);
@@ -248,6 +269,24 @@ async function handleDelete(id: number) {
 .domain-meta {
   font-size: 14px;
   color: var(--color-text-secondary);
+}
+
+.domain-purpose {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(0, 212, 170, 0.05);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--color-text-secondary);
+}
+
+.domain-rejection {
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255, 107, 107, 0.05);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  color: var(--color-danger);
 }
 
 .domain-actions {

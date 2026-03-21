@@ -3,11 +3,13 @@ import { onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDomainStore } from '@/stores/domains'
+import { useI18n } from 'vue-i18n'
 import Card from '@/components/Card.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const domainStore = useDomainStore()
+const { t } = useI18n()
 
 onMounted(() => {
   domainStore.fetchDomains()
@@ -25,15 +27,15 @@ const stats = computed(() => {
 })
 
 const recentDomains = computed(() => {
-  return domainStore.domains.slice(0, 5)
+  return domainStore.domains.filter(d => d.user_id === authStore.user?.id).slice(0, 5)
 })
 </script>
 
 <template>
   <div class="dashboard">
     <div class="welcome">
-      <h1>欢迎回来，{{ authStore.user?.username }}</h1>
-      <p>这是您的域名管理概览</p>
+      <h1>{{ t('dashboard.welcome') }}, {{ authStore.user?.username }}</h1>
+      <p>{{ t('dashboard.welcome') }}</p>
     </div>
 
     <div class="stats-grid">
@@ -46,7 +48,7 @@ const recentDomains = computed(() => {
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.myDomains }}</span>
-          <span class="stat-label">我的域名</span>
+          <span class="stat-label">{{ t('nav.myDomains') }}</span>
         </div>
       </Card>
 
@@ -59,7 +61,7 @@ const recentDomains = computed(() => {
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.activeDomains }}</span>
-          <span class="stat-label">已解析</span>
+          <span class="stat-label">{{ t('domains.active') }}</span>
         </div>
       </Card>
 
@@ -73,7 +75,7 @@ const recentDomains = computed(() => {
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.pendingDomains }}</span>
-          <span class="stat-label">待审核</span>
+          <span class="stat-label">{{ t('domains.pending') }}</span>
         </div>
       </Card>
 
@@ -87,25 +89,25 @@ const recentDomains = computed(() => {
         </div>
         <div class="stat-content">
           <span class="stat-value">{{ stats.totalDomains }}</span>
-          <span class="stat-label">系统域名</span>
+          <span class="stat-label">{{ t('dashboard.totalDomains') }}</span>
         </div>
       </Card>
     </div>
 
     <Card customClass="recent-card">
       <template #header>
-        <h3>最近域名</h3>
-        <router-link to="/domains" class="view-all">查看全部</router-link>
+        <h3>{{ t('dashboard.recentActivity') }}</h3>
+        <router-link to="/domains" class="view-all">{{ t('domains.all') }}</router-link>
       </template>
       <div class="domain-list">
         <div v-if="recentDomains.length === 0" class="empty-state">
-          <p>暂无域名</p>
-          <router-link to="/domains" class="link">添加域名</router-link>
+          <p>{{ t('domains.noDomains') }}</p>
+          <router-link to="/domains" class="link">{{ t('domains.addDomain') }}</router-link>
         </div>
         <div v-for="domain in recentDomains" :key="domain.id" class="domain-item" @click="router.push(`/dns/${domain.name}`)">
           <div class="domain-info">
             <span class="domain-name">{{ domain.name }}</span>
-            <span class="domain-status" :class="domain.status">{{ domain.status === 'active' ? '已解析' : domain.status === 'pending' ? '待审核' : '已暂停' }}</span>
+            <span class="domain-status" :class="domain.status">{{ domain.status === 'active' ? t('domains.active') : domain.status === 'pending' ? t('domains.pending') : t('domains.suspended') }}</span>
           </div>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"/>

@@ -2,23 +2,26 @@
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
+import { setLocale } from '@/i18n'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const { t, locale } = useI18n()
 
 const sidebarCollapsed = ref(false)
 
 const navItems = computed(() => {
   const items = [
-    { path: '/dashboard', label: '仪表盘', icon: 'dashboard' },
-    { path: '/domains', label: '我的域名', icon: 'domain' }
+    { path: '/dashboard', label: t('nav.dashboard'), icon: 'dashboard' },
+    { path: '/domains', label: t('nav.myDomains'), icon: 'domain' }
   ]
   if (authStore.isAdmin) {
     items.push(
-      { path: '/admin/users', label: '用户管理', icon: 'users' },
-      { path: '/admin/domains', label: '域名分配', icon: 'assignment' },
-      { path: '/admin/settings', label: '系统设置', icon: 'settings' }
+      { path: '/admin/users', label: t('nav.userManagement'), icon: 'users' },
+      { path: '/admin/domains', label: t('nav.domainAssignment'), icon: 'assignment' },
+      { path: '/admin/settings', label: t('nav.systemSettings'), icon: 'settings' }
     )
   }
   return items
@@ -32,6 +35,11 @@ function handleLogout() {
 function isActive(path: string) {
   return route.path === path
 }
+
+function toggleLocale() {
+  const newLocale = locale.value === 'zh' ? 'en' : 'zh'
+  setLocale(newLocale)
+}
 </script>
 
 <template>
@@ -44,7 +52,7 @@ function isActive(path: string) {
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
           </svg>
         </div>
-        <span v-if="!sidebarCollapsed" class="logo-text">域名管理</span>
+        <span v-if="!sidebarCollapsed" class="logo-text">DNS Manager</span>
       </div>
 
       <nav class="sidebar-nav">
@@ -75,24 +83,29 @@ function isActive(path: string) {
         </router-link>
       </nav>
 
-      <button class="collapse-btn" @click="sidebarCollapsed = !sidebarCollapsed">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path v-if="sidebarCollapsed" d="M9 18l6-6-6-6"/>
-          <path v-else d="M15 18l-6-6 6-6"/>
-        </svg>
-      </button>
+      <div class="sidebar-footer">
+        <button class="locale-btn" @click="toggleLocale">
+          {{ locale === 'zh' ? 'EN' : '中' }}
+        </button>
+        <button class="collapse-btn" @click="sidebarCollapsed = !sidebarCollapsed">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path v-if="sidebarCollapsed" d="M9 18l6-6-6-6"/>
+            <path v-else d="M15 18l-6-6 6-6"/>
+          </svg>
+        </button>
+      </div>
     </aside>
 
     <div class="main-wrapper">
       <header class="header">
         <div class="header-left">
-          <h2 class="page-title">{{ route.meta.title || '域名管理' }}</h2>
+          <h2 class="page-title">{{ route.meta.title || t('nav.dashboard') }}</h2>
         </div>
         <div class="header-right">
           <div class="user-info">
             <span class="username">{{ authStore.user?.username }}</span>
             <span class="role-badge" :class="authStore.user?.role">
-              {{ authStore.user?.role === 'admin' ? '管理员' : '用户' }}
+              {{ authStore.user?.role === 'admin' ? t('admin.users.admin') : t('admin.users.user') }}
             </span>
           </div>
           <button class="logout-btn" @click="handleLogout">
@@ -209,15 +222,36 @@ function isActive(path: string) {
   white-space: nowrap;
 }
 
+.sidebar-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  border-top: 1px solid var(--color-border);
+}
+
+.locale-btn {
+  flex: 1;
+  padding: 8px 16px;
+  background: rgba(0, 212, 170, 0.1);
+  color: var(--color-accent);
+  border-radius: var(--radius-sm);
+  font-weight: 500;
+  transition: all var(--transition-fast);
+}
+
+.locale-btn:hover {
+  background: rgba(0, 212, 170, 0.2);
+}
+
 .collapse-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  padding: 16px;
+  padding: 8px;
   background: none;
   color: var(--color-text-secondary);
-  border-top: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   transition: color var(--transition-fast);
 }
 

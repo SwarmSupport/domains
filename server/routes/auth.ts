@@ -2,60 +2,105 @@ import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import db from '../db'
 import { generateToken, authMiddleware, AuthRequest } from '../middleware/auth'
+import { verifyTurnstile } from '../utils/turnstile'
+import { sendVerificationEmail } from '../utils/email'
 
 const router = Router()
 
-router.post('/register', (req, res) => {
-  const { username, email, password } = req.body
+function getSetting(key: string): string | null {
+  const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined
+  return setting?.value || null
+}
+
+function isEmailEnabled(): boolean {
+  const enabled = getSetting('EMAIL_ENABLED')
+  return enabled !== 'false' && enabled !== '0'
+}
+
+function isEmailVerificationRequired(): boolean {
+  return isEmailEnabled()
+}
+
+router.post('/register', async (req, res) => {
+  const { username, email, password, turnstileToken } = req.body
 
   if (!username || !email || !password) {
-    return res.status(400).json({ success: false, error: '请填写所有字段' })
+    return res.status(400).json({ success: false, error: 'Please fill in all fields' })
   }
 
   if (username.length < 3 || username.length > 20) {
-    return res.status(400).json({ success: false, error: '用户名需要 3-20 个字符' })
+    return res.status(400).json({ success: false, error: 'Username must be 3-20 characters' })
   }
 
   if (password.length < 6) {
-    return res.status(400).json({ success: false, error: '密码至少需要 6 个字符' })
+    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' })
+  }
+
+  // Verify Turnstile (passes token, secret key check is inside verifyTurnstile)
+  const turnstileValid = await verifyTurnstile(turnstileToken || '')
+  if (!turnstileValid) {
+    return res.status(400).json({ success: false, error: 'Turnstile verification failed' })
   }
 
   const existingUser = db.prepare('SELECT id FROM users WHERE email = ? OR username = ?').get(email, username)
   if (existingUser) {
-    return res.status(400).json({ success: false, error: '邮箱或用户名已存在' })
+    return res.status(400).json({ success: false, error: 'Email or username already exists' })
   }
 
   const hashedPassword = bcrypt.hashSync(password, 10)
   const result = db.prepare(`
-    INSERT INTO users (username, email, password, role)
-    VALUES (?, ?, ?, 'user')
-  `).run(username, email, hashedPassword)
+    INSERT INTO users (username, email, password, role, email_verified)
+    VALUES (?, ?, ?, 'user', ?)
+  `).run(username, email, hashedPassword, isEmailVerificationRequired() ? 0 : 1)
 
-  const user = {
-    id: result.lastInsertRowid as number,
-    username,
-    email,
-    role: 'user'
+  const userId = result.lastInsertRowid as number
+
+  // Send verification email if email is enabled
+  if (isEmailVerificationRequired()) {
+    await sendVerificationEmail(email, username)
+    res.json({
+      success: true,
+      data: {
+        message: 'Registration successful. Please check your email to verify your account.',
+        userId
+      }
+    })
+  } else {
+    res.json({
+      success: true,
+      data: {
+        message: 'Registration successful. You can now login.',
+        userId
+      }
+    })
   }
-
-  const token = generateToken(user)
-
-  res.json({
-    success: true,
-    data: { token, user }
-  })
 })
 
-router.post('/login', (req, res) => {
-  const { email, password } = req.body
+router.post('/login', async (req, res) => {
+  const { email, password, turnstileToken } = req.body
 
   if (!email || !password) {
-    return res.status(400).json({ success: false, error: '请填写所有字段' })
+    return res.status(400).json({ success: false, error: 'Please fill in all fields' })
+  }
+
+  // Verify Turnstile
+  const turnstileValid = await verifyTurnstile(turnstileToken || '')
+  if (!turnstileValid) {
+    return res.status(400).json({ success: false, error: 'Turnstile verification failed' })
   }
 
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email) as any
   if (!user || !bcrypt.compareSync(password, user.password)) {
-    return res.status(401).json({ success: false, error: '邮箱或密码错误' })
+    return res.status(401).json({ success: false, error: 'Invalid email or password' })
+  }
+
+  // Check email verification if email is enabled
+  if (isEmailVerificationRequired() && !user.email_verified) {
+    return res.status(401).json({
+      success: false,
+      error: 'Please verify your email first',
+      needsVerification: true
+    })
   }
 
   const token = generateToken(user)
@@ -68,7 +113,8 @@ router.post('/login', (req, res) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        role: user.role
+        role: user.role,
+        email_verified: user.email_verified
       }
     }
   })

@@ -1,47 +1,66 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
+import { settingApi } from '@/api'
 import InputField from '@/components/InputField.vue'
 import Button from '@/components/Button.vue'
+import Turnstile from '@/components/Turnstile.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const username = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
+const turnstileToken = ref('')
+const turnstileSiteKey = ref('')
 const error = ref('')
+const successMessage = ref('')
+
+onMounted(async () => {
+  try {
+    const { data } = await settingApi.get('TURNSTILE_SITE_KEY')
+    if (data.success && data.data?.value) {
+      turnstileSiteKey.value = data.data.value
+    }
+  } catch (e) {
+    console.error('Failed to load Turnstile site key')
+  }
+})
 
 async function handleRegister() {
   error.value = ''
+  successMessage.value = ''
 
   if (!username.value || !email.value || !password.value || !confirmPassword.value) {
-    error.value = '请填写所有字段'
+    error.value = t('auth.fillAllFields')
     return
   }
 
   if (username.value.length < 3 || username.value.length > 20) {
-    error.value = '用户名需要 3-20 个字符'
+    error.value = t('auth.usernameLength')
     return
   }
 
   if (password.value.length < 6) {
-    error.value = '密码至少需要 6 个字符'
+    error.value = t('auth.passwordTooShort')
     return
   }
 
   if (password.value !== confirmPassword.value) {
-    error.value = '两次密码输入不一致'
+    error.value = t('auth.passwordMismatch')
     return
   }
 
-  const success = await authStore.register(username.value, email.value, password.value)
-  if (success) {
-    router.push('/dashboard')
+  const result = await authStore.register(username.value, email.value, password.value, turnstileToken.value)
+  if (result.success) {
+    successMessage.value = result.message || 'Registration successful'
   } else {
-    error.value = '注册失败，请稍后重试'
+    error.value = result.error || t('auth.registerFailed')
   }
 }
 </script>
@@ -56,42 +75,53 @@ async function handleRegister() {
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
           </svg>
         </div>
-        <h1>创建账户</h1>
-        <p>开始管理您的域名</p>
+        <h1>{{ t('auth.registerTitle') }}</h1>
+        <p>{{ t('auth.registerSubtitle') }}</p>
       </div>
 
-      <form @submit.prevent="handleRegister" class="auth-form">
+      <div v-if="successMessage" class="success-message">
+        <p>{{ successMessage }}</p>
+        <router-link to="/login">{{ t('auth.loginNow') }}</router-link>
+      </div>
+
+      <form v-else @submit.prevent="handleRegister" class="auth-form">
         <InputField
           v-model="username"
-          label="用户名"
-          placeholder="请输入用户名 (3-20字符)"
+          :label="t('auth.username')"
+          :placeholder="t('auth.usernamePlaceholder')"
         />
         <InputField
           v-model="email"
           type="email"
-          label="邮箱"
-          placeholder="请输入邮箱"
+          :label="t('auth.email')"
+          :placeholder="t('auth.emailPlaceholder')"
         />
         <InputField
           v-model="password"
           type="password"
-          label="密码"
-          placeholder="请输入密码 (至少6字符)"
+          :label="t('auth.password')"
+          :placeholder="t('auth.passwordPlaceholder')"
         />
         <InputField
           v-model="confirmPassword"
           type="password"
-          label="确认密码"
-          placeholder="请再次输入密码"
+          :label="t('auth.confirmPassword')"
+          :placeholder="t('auth.confirmPasswordPlaceholder')"
+        />
+        <Turnstile
+          v-if="turnstileSiteKey"
+          :site-key="turnstileSiteKey"
+          v-model="turnstileToken"
+          class="turnstile"
         />
         <p v-if="error" class="error">{{ error }}</p>
         <Button type="submit" :loading="authStore.loading">
-          注册
+          {{ t('auth.register') }}
         </Button>
       </form>
 
       <p class="auth-footer">
-        已有账户？ <router-link to="/login">立即登录</router-link>
+        {{ t('auth.hasAccount') }} <router-link to="/login">{{ t('auth.loginNow') }}</router-link>
       </p>
     </div>
   </div>
@@ -148,10 +178,33 @@ async function handleRegister() {
   gap: 20px;
 }
 
+.turnstile {
+  display: flex;
+  justify-content: center;
+}
+
 .error {
   color: var(--color-danger);
   font-size: 14px;
   text-align: center;
+}
+
+.success-message {
+  text-align: center;
+  padding: 20px;
+  background: rgba(0, 212, 170, 0.1);
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+}
+
+.success-message p {
+  color: var(--color-accent);
+  margin-bottom: 12px;
+}
+
+.success-message a {
+  color: var(--color-accent);
+  font-weight: 500;
 }
 
 .auth-footer {

@@ -30,7 +30,7 @@ api.interceptors.response.use(
 
 export const authApi = {
   login: (data: LoginForm) => api.post<ApiResponse<{ token: string; user: User }>>('/auth/login', data),
-  register: (data: RegisterForm) => api.post<ApiResponse<{ token: string; user: User }>>('/auth/register', data),
+  register: (data: RegisterForm) => api.post<ApiResponse<{ userId: number; message: string }>>('/auth/register', data),
   getMe: () => api.get<ApiResponse<User>>('/auth/me')
 }
 
@@ -42,10 +42,11 @@ export const userApi = {
 
 export const domainApi = {
   getList: () => api.get<ApiResponse<Domain[]>>('/domains'),
-  create: (name: string) => api.post<ApiResponse<Domain>>('/domains', { name }),
+  create: (name: string, purpose?: string) => api.post<ApiResponse<Domain>>('/domains', { name, purpose }),
   update: (id: number, data: Partial<Domain>) => api.put<ApiResponse>(`/domains/${id}`, data),
   delete: (id: number) => api.delete<ApiResponse>(`/domains/${id}`),
-  assign: (id: number, userId: number) => api.post<ApiResponse>(`/domains/${id}/assign`, { userId })
+  approve: (id: number, userId: number) => api.post<ApiResponse>(`/domains/${id}/approve`, { userId }),
+  reject: (id: number, reason?: string) => api.post<ApiResponse>(`/domains/${id}/reject`, { reason })
 }
 
 export const dnsApi = {
@@ -58,6 +59,11 @@ export const dnsApi = {
 export const settingApi = {
   get: (key: string) => api.get<ApiResponse<{ value: string }>>(`/settings/${key}`),
   set: (key: string, value: string) => api.post<ApiResponse>('/settings', { key, value })
+}
+
+export const emailApi = {
+  verify: (token: string) => api.post<ApiResponse>('/email/verify', { token }),
+  resendVerification: () => api.post<ApiResponse>('/email/resend-verification')
 }
 
 export default api

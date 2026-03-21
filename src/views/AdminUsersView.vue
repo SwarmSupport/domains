@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useUserStore } from '@/stores/users'
+import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
 import Card from '@/components/Card.vue'
 import Button from '@/components/Button.vue'
 import Modal from '@/components/Modal.vue'
 import type { User } from '@/types'
 
 const userStore = useUserStore()
+const authStore = useAuthStore()
+const { t } = useI18n()
 
 const showEditModal = ref(false)
 const editingUser = ref<User | null>(null)
@@ -32,7 +36,11 @@ async function handleUpdateRole() {
 }
 
 async function handleDeleteUser(id: number) {
-  if (confirm('确定要删除这个用户吗？')) {
+  if (id === authStore.user?.id) {
+    alert(t('admin.users.cannotDeleteSelf'))
+    return
+  }
+  if (confirm(t('admin.users.deleteConfirm'))) {
     await userStore.deleteUser(id)
   }
 }
@@ -42,22 +50,22 @@ async function handleDeleteUser(id: number) {
   <div class="admin-users">
     <Card>
       <template #header>
-        <h3>用户列表</h3>
+        <h3>{{ t('admin.users.title') }}</h3>
       </template>
 
-      <div v-if="userStore.loading" class="loading">加载中...</div>
+      <div v-if="userStore.loading" class="loading">{{ t('common.loading') }}</div>
       <div v-else-if="userStore.users.length === 0" class="empty-state">
-        <p>暂无用户</p>
+        <p>-</p>
       </div>
       <table v-else class="users-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>用户名</th>
-            <th>邮箱</th>
-            <th>角色</th>
-            <th>注册时间</th>
-            <th>操作</th>
+            <th>{{ t('admin.users.id') }}</th>
+            <th>{{ t('admin.users.username') }}</th>
+            <th>{{ t('admin.users.email') }}</th>
+            <th>{{ t('admin.users.role') }}</th>
+            <th>{{ t('admin.users.createdAt') }}</th>
+            <th>{{ t('common.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -67,16 +75,16 @@ async function handleDeleteUser(id: number) {
             <td>{{ user.email }}</td>
             <td>
               <span class="role-badge" :class="user.role">
-                {{ user.role === 'admin' ? '管理员' : '用户' }}
+                {{ user.role === 'admin' ? t('admin.users.admin') : t('admin.users.user') }}
               </span>
             </td>
             <td>{{ new Date(user.created_at).toLocaleDateString() }}</td>
             <td class="actions-cell">
               <Button size="sm" variant="secondary" @click="openEditModal(user)">
-                编辑
+                {{ t('common.edit') }}
               </Button>
-              <Button size="sm" variant="danger" @click="handleDeleteUser(user.id)">
-                删除
+              <Button size="sm" variant="danger" @click="handleDeleteUser(user.id)" :disabled="user.id === authStore.user?.id">
+                {{ t('common.delete') }}
               </Button>
             </td>
           </tr>
@@ -84,19 +92,19 @@ async function handleDeleteUser(id: number) {
       </table>
     </Card>
 
-    <Modal v-model:show="showEditModal" title="编辑用户">
+    <Modal v-model:show="showEditModal" :title="t('admin.users.changeRole')">
       <div class="edit-form">
-        <p class="edit-info">正在编辑用户: <strong>{{ editingUser?.username }}</strong></p>
+        <p class="edit-info">{{ t('common.edit') }}: <strong>{{ editingUser?.username }}</strong></p>
         <div class="role-select">
-          <label>角色</label>
+          <label>{{ t('admin.users.role') }}</label>
           <select v-model="selectedRole">
-            <option value="user">普通用户</option>
-            <option value="admin">管理员</option>
+            <option value="user">{{ t('admin.users.user') }}</option>
+            <option value="admin">{{ t('admin.users.admin') }}</option>
           </select>
         </div>
         <div class="form-actions">
-          <Button variant="secondary" @click="showEditModal = false">取消</Button>
-          <Button @click="handleUpdateRole">保存</Button>
+          <Button variant="secondary" @click="showEditModal = false">{{ t('common.cancel') }}</Button>
+          <Button @click="handleUpdateRole">{{ t('common.save') }}</Button>
         </div>
       </div>
     </Modal>

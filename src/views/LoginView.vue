@@ -1,28 +1,49 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useI18n } from 'vue-i18n'
+import { settingApi } from '@/api'
 import InputField from '@/components/InputField.vue'
 import Button from '@/components/Button.vue'
+import Turnstile from '@/components/Turnstile.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { t } = useI18n()
 
 const email = ref('')
 const password = ref('')
+const turnstileToken = ref('')
+const turnstileSiteKey = ref('')
 const error = ref('')
+
+onMounted(async () => {
+  try {
+    const { data } = await settingApi.get('TURNSTILE_SITE_KEY')
+    if (data.success && data.data?.value) {
+      turnstileSiteKey.value = data.data.value
+    }
+  } catch (e) {
+    console.error('Failed to load Turnstile site key')
+  }
+})
 
 async function handleLogin() {
   error.value = ''
   if (!email.value || !password.value) {
-    error.value = '请填写所有字段'
+    error.value = t('auth.fillAllFields')
     return
   }
-  const success = await authStore.login(email.value, password.value)
-  if (success) {
+
+  const result = await authStore.login(email.value, password.value, turnstileToken.value)
+
+  if (result.success) {
     router.push('/dashboard')
+  } else if (result.needsVerification) {
+    error.value = t('auth.verificationRequired')
   } else {
-    error.value = '邮箱或密码错误'
+    error.value = result.error || t('auth.invalidCredentials')
   }
 }
 </script>
@@ -37,31 +58,37 @@ async function handleLogin() {
             <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
           </svg>
         </div>
-        <h1>域名管理系统</h1>
-        <p>管理您的域名资产</p>
+        <h1>{{ t('auth.loginTitle') }}</h1>
+        <p>{{ t('auth.loginSubtitle') }}</p>
       </div>
 
       <form @submit.prevent="handleLogin" class="auth-form">
         <InputField
           v-model="email"
           type="email"
-          label="邮箱"
-          placeholder="请输入邮箱"
+          :label="t('auth.email')"
+          :placeholder="t('auth.emailPlaceholder')"
         />
         <InputField
           v-model="password"
           type="password"
-          label="密码"
-          placeholder="请输入密码"
+          :label="t('auth.password')"
+          :placeholder="t('auth.passwordPlaceholder')"
+        />
+        <Turnstile
+          v-if="turnstileSiteKey"
+          :site-key="turnstileSiteKey"
+          v-model="turnstileToken"
+          class="turnstile"
         />
         <p v-if="error" class="error">{{ error }}</p>
         <Button type="submit" :loading="authStore.loading">
-          登录
+          {{ t('auth.login') }}
         </Button>
       </form>
 
       <p class="auth-footer">
-        还没有账户？ <router-link to="/register">立即注册</router-link>
+        {{ t('auth.noAccount') }} <router-link to="/register">{{ t('auth.registerNow') }}</router-link>
       </p>
     </div>
   </div>
@@ -116,6 +143,11 @@ async function handleLogin() {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.turnstile {
+  display: flex;
+  justify-content: center;
 }
 
 .error {

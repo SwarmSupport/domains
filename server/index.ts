@@ -6,6 +6,7 @@ import userRoutes from './routes/users'
 import domainRoutes from './routes/domains'
 import dnsRoutes from './routes/dns'
 import settingRoutes from './routes/settings'
+import emailRoutes from './routes/email'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -20,6 +21,7 @@ app.use('/api/users', userRoutes)
 app.use('/api/domains', domainRoutes)
 app.use('/api/dns', dnsRoutes)
 app.use('/api/settings', settingRoutes)
+app.use('/api/email', emailRoutes)
 
 app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Server is running' })

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import jwt from 'jsonwebtoken'
 import db from '../db'
-import { adminMiddleware, AuthRequest } from '../middleware/auth'
+import { authMiddleware, adminMiddleware, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
@@ -48,8 +48,8 @@ router.get('/:key', (req, res) => {
   }
 })
 
-// POST (update) settings - requires admin authentication
-router.post('/', adminMiddleware, (req, res) => {
+// POST (update) settings - requires admin authentication (both authMiddleware and adminMiddleware)
+router.post('/', authMiddleware, adminMiddleware, (req, res) => {
   const { key, value } = req.body
 
   if (!key) {

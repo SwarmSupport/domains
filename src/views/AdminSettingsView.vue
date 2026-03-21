@@ -9,21 +9,46 @@ import Toggle from '@/components/Toggle.vue'
 
 const { t } = useI18n()
 
+// DNS & Domain settings
 const dnspodToken = ref('')
 const domainSuffixes = ref('')
+const dnsLoading = ref(false)
+const dnsSaved = ref(false)
+const dnsError = ref('')
+
+// Turnstile settings
 const turnstileEnabled = ref(false)
 const turnstileSiteKey = ref('')
 const turnstileSecretKey = ref('')
+const turnstileLoading = ref(false)
+const turnstileSaved = ref(false)
+const turnstileError = ref('')
+
+// Email settings
 const emailEnabled = ref(false)
 const resendApiKey = ref('')
 const resendDomain = ref('')
 const fromEmail = ref('')
-const loading = ref(false)
-const saved = ref(false)
+const emailLoading = ref(false)
+const emailSaved = ref(false)
+const emailError = ref('')
+
+// Initial loading state
+const initialLoading = ref(true)
 
 onMounted(async () => {
   try {
-    const [dnspod, suffixes, turnstileEn, turnstileSite, turnstileSecret, emailEn, resendKey, resendDom, from] = await Promise.all([
+    const [
+      { data: dnspod },
+      { data: suffixes },
+      { data: turnstileEn },
+      { data: turnstileSite },
+      { data: turnstileSecret },
+      { data: emailEn },
+      { data: resendKey },
+      { data: resendDom },
+      { data: from }
+    ] = await Promise.all([
       settingApi.get('DNSPOD_TOKEN'),
       settingApi.get('DOMAIN_SUFFIXES'),
       settingApi.get('TURNSTILE_ENABLED'),
@@ -35,86 +60,142 @@ onMounted(async () => {
       settingApi.get('FROM_EMAIL')
     ])
 
-    if (dnspod.data.success && dnspod.data.data) dnspodToken.value = dnspod.data.data.value
-    if (suffixes.data.success && suffixes.data.data) domainSuffixes.value = suffixes.data.data.value
-    if (turnstileEn.data.success && turnstileEn.data.data) turnstileEnabled.value = turnstileEn.data.data.value !== 'false' && turnstileEn.data.data.value !== '0'
-    if (turnstileSite.data.success && turnstileSite.data.data) turnstileSiteKey.value = turnstileSite.data.data.value
-    if (turnstileSecret.data.success && turnstileSecret.data.data) turnstileSecretKey.value = turnstileSecret.data.data.value
-    if (emailEn.data.success && emailEn.data.data) emailEnabled.value = emailEn.data.data.value !== 'false' && emailEn.data.data.value !== '0'
-    if (resendKey.data.success && resendKey.data.data) resendApiKey.value = resendKey.data.data.value
-    if (resendDom.data.success && resendDom.data.data) resendDomain.value = resendDom.data.data.value
-    if (from.data.success && from.data.data) fromEmail.value = from.data.data.value
+    if (dnspod.success && dnspod.data) dnspodToken.value = dnspod.data.value
+    if (suffixes.success && suffixes.data) domainSuffixes.value = suffixes.data.value
+    if (turnstileEn.success && turnstileEn.data) turnstileEnabled.value = turnstileEn.data.value !== 'false' && turnstileEn.data.value !== '0'
+    if (turnstileSite.success && turnstileSite.data) turnstileSiteKey.value = turnstileSite.data.value
+    if (turnstileSecret.success && turnstileSecret.data) turnstileSecretKey.value = turnstileSecret.data.value
+    if (emailEn.success && emailEn.data) emailEnabled.value = emailEn.data.value !== 'false' && emailEn.data.value !== '0'
+    if (resendKey.success && resendKey.data) resendApiKey.value = resendKey.data.value
+    if (resendDom.success && resendDom.data) resendDomain.value = resendDom.data.value
+    if (from.success && from.data) fromEmail.value = from.data.value
   } catch (e) {
-    console.error('Failed to load settings')
+    console.error('Failed to load settings:', e)
+  } finally {
+    initialLoading.value = false
   }
 })
 
-async function handleSave() {
-  loading.value = true
-  saved.value = false
+// DNS & Domain handlers
+async function handleSaveDns() {
+  dnsLoading.value = true
+  dnsError.value = ''
+  dnsSaved.value = false
   try {
     await Promise.all([
       settingApi.set('DNSPOD_TOKEN', dnspodToken.value),
-      settingApi.set('DOMAIN_SUFFIXES', domainSuffixes.value),
+      settingApi.set('DOMAIN_SUFFIXES', domainSuffixes.value)
+    ])
+    dnsSaved.value = true
+    setTimeout(() => dnsSaved.value = false, 3000)
+  } catch (e) {
+    dnsError.value = t('admin.settings.saveFailed')
+  } finally {
+    dnsLoading.value = false
+  }
+}
+
+// Turnstile handlers
+async function handleSaveTurnstile() {
+  turnstileLoading.value = true
+  turnstileError.value = ''
+  turnstileSaved.value = false
+  try {
+    await Promise.all([
       settingApi.set('TURNSTILE_ENABLED', turnstileEnabled.value ? 'true' : 'false'),
       settingApi.set('TURNSTILE_SITE_KEY', turnstileSiteKey.value),
-      settingApi.set('TURNSTILE_SECRET_KEY', turnstileSecretKey.value),
+      settingApi.set('TURNSTILE_SECRET_KEY', turnstileSecretKey.value)
+    ])
+    turnstileSaved.value = true
+    setTimeout(() => turnstileSaved.value = false, 3000)
+  } catch (e) {
+    turnstileError.value = t('admin.settings.saveFailed')
+  } finally {
+    turnstileLoading.value = false
+  }
+}
+
+// Email handlers
+async function handleSaveEmail() {
+  emailLoading.value = true
+  emailError.value = ''
+  emailSaved.value = false
+  try {
+    await Promise.all([
       settingApi.set('EMAIL_ENABLED', emailEnabled.value ? 'true' : 'false'),
       settingApi.set('RESEND_API_KEY', resendApiKey.value),
       settingApi.set('RESEND_DOMAIN', resendDomain.value),
       settingApi.set('FROM_EMAIL', fromEmail.value)
     ])
-    saved.value = true
-    setTimeout(() => saved.value = false, 3000)
+    emailSaved.value = true
+    setTimeout(() => emailSaved.value = false, 3000)
+  } catch (e) {
+    emailError.value = t('admin.settings.saveFailed')
   } finally {
-    loading.value = false
+    emailLoading.value = false
   }
 }
 </script>
 
 <template>
   <div class="settings-page">
-    <Card>
-      <template #header>
-        <h3>{{ t('admin.settings.title') }}</h3>
-      </template>
+    <h2 class="page-title">{{ t('admin.settings.title') }}</h2>
 
-      <div class="settings-form">
-        <div class="setting-section">
-          <h4>{{ t('admin.settings.dnspodConfig') }}</h4>
-          <p class="setting-desc">
-            {{ t('admin.settings.dnspodDesc') }}<br>
-            {{ t('admin.settings.dnspodFormat') }}
-          </p>
-          <InputField
-            v-model="dnspodToken"
-            label="DNSPod Token"
-            placeholder="ID,TOKEN"
-          />
-        </div>
+    <div v-if="initialLoading" class="loading">
+      {{ t('admin.settings.loading') }}
+    </div>
 
-        <div class="setting-section">
-          <h4>{{ t('admin.settings.domainSuffixes') }}</h4>
-          <p class="setting-desc">
-            {{ t('admin.settings.domainSuffixesDesc') }}
-          </p>
-          <textarea
-            v-model="domainSuffixes"
-            class="textarea-field"
-            :placeholder="'example.com\nanother.org'"
-            rows="5"
-          ></textarea>
-        </div>
+    <div v-else class="settings-grid">
+      <!-- DNS & Domains Card -->
+      <Card class="settings-card">
+        <template #header>
+          <h3>{{ t('admin.settings.dnsAndDomains') }}</h3>
+        </template>
 
-        <div class="setting-section">
-          <h4>{{ t('admin.settings.cloudflareConfig') }}</h4>
-          <p class="setting-desc">
-            {{ t('admin.settings.cloudflareDesc') }}
-          </p>
-          <div class="toggle-row">
-            <span class="toggle-label">{{ t('admin.settings.enableTurnstile') }}</span>
-            <Toggle v-model="turnstileEnabled" />
+        <div class="form-stack">
+          <div class="field-group">
+            <label class="field-label">{{ t('admin.settings.dnspodConfig') }}</label>
+            <p class="field-desc">{{ t('admin.settings.dnspodDesc') }}</p>
+            <InputField
+              v-model="dnspodToken"
+              placeholder="ID,TOKEN"
+            />
+            <code class="format-hint">{{ t('admin.settings.dnspodFormat') }}</code>
           </div>
+
+          <div class="field-group">
+            <label class="field-label">{{ t('admin.settings.domainSuffixes') }}</label>
+            <p class="field-desc">{{ t('admin.settings.domainSuffixesDesc') }}</p>
+            <textarea
+              v-model="domainSuffixes"
+              class="textarea-field"
+              rows="3"
+            ></textarea>
+          </div>
+        </div>
+
+        <p v-if="dnsError" class="error-text">{{ dnsError }}</p>
+        <p v-if="dnsSaved" class="success-text">{{ t('admin.settings.settingsSaved') }}</p>
+
+        <div class="card-actions">
+          <Button @click="handleSaveDns" :loading="dnsLoading" :disabled="dnsSaved">
+            {{ t('common.save') }}
+          </Button>
+        </div>
+      </Card>
+
+      <!-- Cloudflare Turnstile Card -->
+      <Card class="settings-card">
+        <template #header>
+          <h3>{{ t('admin.settings.cloudflareConfig') }}</h3>
+        </template>
+
+        <div class="toggle-row">
+          <span class="toggle-label">{{ t('admin.settings.enableTurnstile') }}</span>
+          <Toggle v-model="turnstileEnabled" />
+        </div>
+
+        <div class="form-stack">
           <InputField
             v-model="turnstileSiteKey"
             :label="t('admin.settings.turnstileSiteKey')"
@@ -127,15 +208,28 @@ async function handleSave() {
           />
         </div>
 
-        <div class="setting-section">
-          <h4>{{ t('admin.settings.resendConfig') }}</h4>
-          <p class="setting-desc">
-            {{ t('admin.settings.resendDesc') }}
-          </p>
-          <div class="toggle-row">
-            <span class="toggle-label">{{ t('admin.settings.enableEmail') }}</span>
-            <Toggle v-model="emailEnabled" />
-          </div>
+        <p v-if="turnstileError" class="error-text">{{ turnstileError }}</p>
+        <p v-if="turnstileSaved" class="success-text">{{ t('admin.settings.settingsSaved') }}</p>
+
+        <div class="card-actions">
+          <Button @click="handleSaveTurnstile" :loading="turnstileLoading" :disabled="turnstileSaved">
+            {{ t('common.save') }}
+          </Button>
+        </div>
+      </Card>
+
+      <!-- Email Service Card -->
+      <Card class="settings-card">
+        <template #header>
+          <h3>{{ t('admin.settings.resendConfig') }}</h3>
+        </template>
+
+        <div class="toggle-row">
+          <span class="toggle-label">{{ t('admin.settings.enableEmail') }}</span>
+          <Toggle v-model="emailEnabled" />
+        </div>
+
+        <div class="form-stack">
           <InputField
             v-model="resendApiKey"
             :label="t('admin.settings.resendApiKey')"
@@ -153,46 +247,85 @@ async function handleSave() {
           />
         </div>
 
-        <div class="form-actions">
-          <Button @click="handleSave" :loading="loading">
+        <p v-if="emailError" class="error-text">{{ emailError }}</p>
+        <p v-if="emailSaved" class="success-text">{{ t('admin.settings.settingsSaved') }}</p>
+
+        <div class="card-actions">
+          <Button @click="handleSaveEmail" :loading="emailLoading" :disabled="emailSaved">
             {{ t('common.save') }}
           </Button>
-          <span v-if="saved" class="saved-message">{{ t('admin.settings.settingsSaved') }}</span>
         </div>
-      </div>
-    </Card>
+      </Card>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .settings-page {
-  max-width: 800px;
+  max-width: 900px;
   margin: 0 auto;
+  padding: 24px;
 }
 
-.settings-form {
+.page-title {
+  font-size: 24px;
+  margin-bottom: 24px;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px;
+  color: var(--color-text-secondary);
+}
+
+.settings-grid {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 20px;
 }
 
-.setting-section h4 {
-  font-size: 18px;
-  margin-bottom: 12px;
+.settings-card {
+  transition: box-shadow 0.2s ease;
 }
 
-.setting-desc {
-  color: var(--color-text-secondary);
+.settings-card:hover {
+  box-shadow: var(--shadow-lg);
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.field-label {
   font-size: 14px;
-  line-height: 1.6;
-  margin-bottom: 20px;
+  font-weight: 500;
+  color: var(--color-text);
 }
 
-.setting-desc code {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 2px 6px;
+.field-desc {
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.format-hint {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px 8px;
   border-radius: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
   font-family: monospace;
+  width: fit-content;
 }
 
 .textarea-field {
@@ -213,28 +346,37 @@ async function handleSave() {
   border-color: var(--color-accent);
 }
 
-.form-actions {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.saved-message {
-  color: var(--color-accent);
-  font-size: 14px;
-}
-
 .toggle-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 12px 0;
-  margin-bottom: 8px;
   border-bottom: 1px solid var(--color-border);
+  margin-bottom: 8px;
 }
 
 .toggle-label {
   font-size: 14px;
   color: var(--color-text);
+}
+
+.card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.error-text {
+  color: var(--color-danger);
+  font-size: 14px;
+  margin: 8px 0 0 0;
+}
+
+.success-text {
+  color: var(--color-accent);
+  font-size: 14px;
+  margin: 8px 0 0 0;
 }
 </style>

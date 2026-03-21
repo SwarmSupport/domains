@@ -26,6 +26,19 @@ export const useUserStore = defineStore('users', () => {
     }
   }
 
+  async function createUser(userData: { username: string; email: string; password: string; role?: string }) {
+    try {
+      const { data } = await userApi.create(userData)
+      if (data.success && data.data) {
+        await fetchUsers() // Refresh list
+        return { success: true, data: data.data }
+      }
+      return { success: false, error: data.error }
+    } catch (e: any) {
+      return { success: false, error: e.response?.data?.error || 'Failed to create user' }
+    }
+  }
+
   async function updateUser(id: number, updates: Partial<User>) {
     try {
       const { data } = await userApi.update(id, updates)
@@ -72,6 +85,7 @@ export const useUserStore = defineStore('users', () => {
     loading,
     error,
     fetchUsers,
+    createUser,
     updateUser,
     updatePassword,
     deleteUser

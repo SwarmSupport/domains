@@ -18,16 +18,93 @@ router.get('/', authMiddleware, adminMiddleware, (req, res) => {
   }
 })
 
-router.put('/:id', authMiddleware, adminMiddleware, (req, res) => {
-  const { id } = req.params
-  const { role } = req.body
+// Create new user (admin only)
+router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
+  const { username, email, password, role } = req.body
 
-  if (!role || !['user', 'admin'].includes(role)) {
-    return res.status(400).json({ success: false, error: 'Invalid role' })
+  // Validate required fields
+  if (!username || !email || !password) {
+    return res.status(400).json({ success: false, error: 'Username, email and password are required' })
   }
 
+  // Validate username (3-20 chars, alphanumeric and underscore)
+  const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/
+  if (!usernameRegex.test(username)) {
+    return res.status(400).json({ success: false, error: 'Invalid username format' })
+  }
+
+  // Validate email format
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailRegex.test(email)) {
+    return res.status(400).json({ success: false, error: 'Invalid email format' })
+  }
+
+  // Validate password length
+  if (password.length < 6) {
+    return res.status(400).json({ success: false, error: 'Password must be at least 6 characters' })
+  }
+
+  // Validate role
+  const validRole = role === 'admin' ? 'admin' : 'user'
+
   try {
-    const result = db.prepare('UPDATE users SET role = ? WHERE id = ?').run(role, id)
+    // Check if username or email already exists
+    const existingUser = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(username, email)
+    if (existingUser) {
+      return res.status(400).json({ success: false, error: 'Username or email already exists' })
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+    const result = db.prepare(`
+      INSERT INTO users (username, email, password, role, email_verified)
+      VALUES (?, ?, ?, ?, 1)
+    `).run(username, email, hashedPassword, validRole)
+
+    res.json({ success: true, data: { id: result.lastInsertRowid, username, email, role: validRole } })
+  } catch (error) {
+    console.error('Error creating user:', error)
+    res.status(500).json({ success: false, error: 'Failed to create user' })
+  }
+})
+
+router.put('/:id', authMiddleware, adminMiddleware, (req, res) => {
+  const { id } = req.params
+  const { role, email } = req.body
+
+  try {
+    // Build update query dynamically
+    const updates: string[] = []
+    const values: any[] = []
+
+    if (role) {
+      if (!['user', 'admin'].includes(role)) {
+        return res.status(400).json({ success: false, error: 'Invalid role' })
+      }
+      updates.push('role = ?')
+      values.push(role)
+    }
+
+    if (email) {
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ success: false, error: 'Invalid email format' })
+      }
+      // Check if email is already taken by another user
+      const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, id)
+      if (existing) {
+        return res.status(400).json({ success: false, error: 'Email already in use' })
+      }
+      updates.push('email = ?')
+      values.push(email)
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, error: 'No updates provided' })
+    }
+
+    values.push(id)
+    const result = db.prepare(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`).run(...values)
 
     if (result.changes === 0) {
       return res.status(404).json({ success: false, error: 'User not found' })
@@ -35,7 +112,7 @@ router.put('/:id', authMiddleware, adminMiddleware, (req, res) => {
 
     res.json({ success: true })
   } catch (error) {
-    console.error('Error updating user role:', error)
+    console.error('Error updating user:', error)
     res.status(500).json({ success: false, error: 'Failed to update user' })
   }
 })

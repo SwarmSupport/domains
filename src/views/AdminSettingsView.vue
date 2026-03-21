@@ -10,7 +10,8 @@ import Toggle from '@/components/Toggle.vue'
 const { t } = useI18n()
 
 // DNS & Domain settings
-const dnspodToken = ref('')
+const dnspodSecretId = ref('')
+const dnspodSecretKey = ref('')
 const domainSuffixes = ref('')
 const dnsLoading = ref(false)
 const dnsSaved = ref(false)
@@ -39,7 +40,8 @@ const initialLoading = ref(true)
 onMounted(async () => {
   try {
     const [
-      { data: dnspod },
+      { data: secretId },
+      { data: secretKey },
       { data: suffixes },
       { data: turnstileEn },
       { data: turnstileSite },
@@ -49,7 +51,8 @@ onMounted(async () => {
       { data: resendDom },
       { data: from }
     ] = await Promise.all([
-      settingApi.get('DNSPOD_TOKEN'),
+      settingApi.get('DNSPOD_SECRET_ID'),
+      settingApi.get('DNSPOD_SECRET_KEY'),
       settingApi.get('DOMAIN_SUFFIXES'),
       settingApi.get('TURNSTILE_ENABLED'),
       settingApi.get('TURNSTILE_SITE_KEY'),
@@ -60,7 +63,8 @@ onMounted(async () => {
       settingApi.get('FROM_EMAIL')
     ])
 
-    if (dnspod.success && dnspod.data) dnspodToken.value = dnspod.data.value
+    if (secretId.success && secretId.data) dnspodSecretId.value = secretId.data.value
+    if (secretKey.success && secretKey.data) dnspodSecretKey.value = secretKey.data.value
     if (suffixes.success && suffixes.data) domainSuffixes.value = suffixes.data.value
     if (turnstileEn.success && turnstileEn.data) turnstileEnabled.value = turnstileEn.data.value !== 'false' && turnstileEn.data.value !== '0'
     if (turnstileSite.success && turnstileSite.data) turnstileSiteKey.value = turnstileSite.data.value
@@ -83,7 +87,8 @@ async function handleSaveDns() {
   dnsSaved.value = false
   try {
     await Promise.all([
-      settingApi.set('DNSPOD_TOKEN', dnspodToken.value),
+      settingApi.set('DNSPOD_SECRET_ID', dnspodSecretId.value),
+      settingApi.set('DNSPOD_SECRET_KEY', dnspodSecretKey.value),
       settingApi.set('DOMAIN_SUFFIXES', domainSuffixes.value)
     ])
     dnsSaved.value = true
@@ -154,13 +159,21 @@ async function handleSaveEmail() {
 
         <div class="form-stack">
           <div class="field-group">
-            <label class="field-label">{{ t('admin.settings.dnspodConfig') }}</label>
+            <label class="field-label">{{ t('admin.settings.dnspodSecretId') }}</label>
             <p class="field-desc">{{ t('admin.settings.dnspodDesc') }}</p>
             <InputField
-              v-model="dnspodToken"
-              placeholder="ID,TOKEN"
+              v-model="dnspodSecretId"
+              placeholder="AKIDxxxxxxxxxxxxxxxxxxxxx"
             />
-            <code class="format-hint">{{ t('admin.settings.dnspodFormat') }}</code>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">{{ t('admin.settings.dnspodSecretKey') }}</label>
+            <InputField
+              v-model="dnspodSecretKey"
+              type="password"
+              placeholder="xxxxxxxxxxxxxxxxxxxxx"
+            />
           </div>
 
           <div class="field-group">
@@ -204,6 +217,7 @@ async function handleSaveEmail() {
           <InputField
             v-model="turnstileSecretKey"
             :label="t('admin.settings.turnstileSecretKey')"
+            type="password"
             placeholder="0xxx..."
           />
         </div>
@@ -233,6 +247,7 @@ async function handleSaveEmail() {
           <InputField
             v-model="resendApiKey"
             :label="t('admin.settings.resendApiKey')"
+            type="password"
             placeholder="re_xxx..."
           />
           <InputField

@@ -1,7 +1,7 @@
 import { Router } from 'express'
 import db from '../db'
 import { authMiddleware, adminMiddleware, AuthRequest } from '../middleware/auth'
-import { createDomain } from '../utils/dnspod'
+import { createDomain, pauseDomain, resumeDomain, deleteDomain as deleteDomainFromDnspod } from '../utils/dnspod'
 import { sendDomainApprovedEmail, sendDomainRejectedEmail } from '../utils/email'
 
 const router = Router()
@@ -69,8 +69,9 @@ router.get('/', (req: AuthRequest, res) => {
   res.json({ success: true, data: domains })
 })
 
-router.post('/', authMiddleware, (req: AuthRequest, res) => {
+router.post('/', authMiddleware, async (req: AuthRequest, res) => {
   const { name, purpose } = req.body
+  const isAdmin = req.user?.role === 'admin'
 
   if (!name) {
     return res.status(400).json({ success: false, error: 'Please enter a domain' })
@@ -87,10 +88,22 @@ router.post('/', authMiddleware, (req: AuthRequest, res) => {
     return res.status(400).json({ success: false, error: 'Domain already exists' })
   }
 
+  let dnspodDomainId: string | null = null
+  let status = 'pending'
+
+  // Admin creates domain directly as active and creates in DNSPod
+  if (isAdmin) {
+    dnspodDomainId = await createDomain(name)
+    if (!dnspodDomainId) {
+      return res.status(500).json({ success: false, error: 'Failed to create domain in DNSPod' })
+    }
+    status = 'active'
+  }
+
   const result = db.prepare(`
-    INSERT INTO domains (name, user_id, purpose, status)
-    VALUES (?, ?, ?, 'pending')
-  `).run(name, req.user?.id, purpose || '')
+    INSERT INTO domains (name, user_id, purpose, status, dnspod_domain_id)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(name, req.user?.id, purpose || '', status, dnspodDomainId)
 
   const domain = db.prepare('SELECT * FROM domains WHERE id = ?').get(result.lastInsertRowid)
 
@@ -193,6 +206,80 @@ router.post('/:id/reject', authMiddleware, adminMiddleware, async (req: AuthRequ
   if (user) {
     await sendDomainRejectedEmail(user.email, user.username, domain.name, reason || '')
   }
+
+  res.json({ success: true })
+})
+
+// Admin: Suspend domain (pause DNS in DNSPod)
+router.post('/:id/suspend', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
+  const { id } = req.params
+
+  const domain = db.prepare('SELECT * FROM domains WHERE id = ?').get(id) as any
+  if (!domain) {
+    return res.status(404).json({ success: false, error: 'Domain not found' })
+  }
+
+  if (!domain.dnspod_domain_id) {
+    return res.status(400).json({ success: false, error: 'Domain not created in DNSPod yet' })
+  }
+
+  // Pause in DNSPod
+  const paused = await pauseDomain(domain.name)
+  if (!paused) {
+    return res.status(500).json({ success: false, error: 'Failed to pause domain in DNSPod' })
+  }
+
+  db.prepare('UPDATE domains SET suspended = 1 WHERE id = ?').run(id)
+
+  res.json({ success: true })
+})
+
+// Admin: Resume domain (resume DNS in DNSPod)
+router.post('/:id/resume', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
+  const { id } = req.params
+
+  const domain = db.prepare('SELECT * FROM domains WHERE id = ?').get(id) as any
+  if (!domain) {
+    return res.status(404).json({ success: false, error: 'Domain not found' })
+  }
+
+  if (!domain.dnspod_domain_id) {
+    return res.status(400).json({ success: false, error: 'Domain not created in DNSPod yet' })
+  }
+
+  // Resume in DNSPod
+  const resumed = await resumeDomain(domain.name)
+  if (!resumed) {
+    return res.status(500).json({ success: false, error: 'Failed to resume domain in DNSPod' })
+  }
+
+  db.prepare('UPDATE domains SET suspended = 0 WHERE id = ?').run(id)
+
+  res.json({ success: true })
+})
+
+// Admin: Delete domain from DNSPod and database
+router.delete('/:id/dnspod', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
+  const { id } = req.params
+
+  const domain = db.prepare('SELECT * FROM domains WHERE id = ?').get(id) as any
+  if (!domain) {
+    return res.status(404).json({ success: false, error: 'Domain not found' })
+  }
+
+  // Delete from DNSPod if exists
+  if (domain.dnspod_domain_id) {
+    const deleted = await deleteDomainFromDnspod(domain.name)
+    if (!deleted) {
+      return res.status(500).json({ success: false, error: 'Failed to delete domain from DNSPod' })
+    }
+  }
+
+  // Delete DNS records from database
+  db.prepare('DELETE FROM dns_records WHERE domain_id = ?').run(id)
+
+  // Delete domain from database
+  db.prepare('DELETE FROM domains WHERE id = ?').run(id)
 
   res.json({ success: true })
 })

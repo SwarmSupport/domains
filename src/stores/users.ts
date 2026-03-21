@@ -80,6 +80,38 @@ export const useUserStore = defineStore('users', () => {
     }
   }
 
+  async function banUser(id: number) {
+    try {
+      const { data } = await userApi.ban(id)
+      if (data.success) {
+        const index = users.value.findIndex(u => u.id === id)
+        if (index !== -1 && users.value[index]) {
+          users.value[index].banned = 1
+        }
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  async function unbanUser(id: number) {
+    try {
+      const { data } = await userApi.unban(id)
+      if (data.success) {
+        const index = users.value.findIndex(u => u.id === id)
+        if (index !== -1 && users.value[index]) {
+          users.value[index].banned = 0
+        }
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
   return {
     users,
     loading,
@@ -88,6 +120,8 @@ export const useUserStore = defineStore('users', () => {
     createUser,
     updateUser,
     updatePassword,
-    deleteUser
+    deleteUser,
+    banUser,
+    unbanUser
   }
 })

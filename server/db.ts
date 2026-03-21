@@ -114,6 +114,30 @@ export function initDatabase() {
     console.warn('Migration check for dnspod_domain_id failed:', err)
   }
 
+  // Migration: Add banned column to users if it doesn't exist
+  try {
+    const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[]
+    const hasBanned = userColumns.some(col => col.name === 'banned')
+    if (!hasBanned) {
+      db.exec('ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0')
+      console.log('Migration: Added banned column to users table')
+    }
+  } catch (err) {
+    console.warn('Migration check for banned failed:', err)
+  }
+
+  // Migration: Add suspended column to domains if it doesn't exist
+  try {
+    const domainColumns = db.prepare("PRAGMA table_info(domains)").all() as { name: string }[]
+    const hasSuspended = domainColumns.some(col => col.name === 'suspended')
+    if (!hasSuspended) {
+      db.exec('ALTER TABLE domains ADD COLUMN suspended INTEGER DEFAULT 0')
+      console.log('Migration: Added suspended column to domains table')
+    }
+  } catch (err) {
+    console.warn('Migration check for suspended failed:', err)
+  }
+
   // Ensure admin user exists and always has admin role
   const adminEmail = 'admin@example.com'
   const admin = db.prepare('SELECT id, role FROM users WHERE email = ?').get(adminEmail) as { id: number; role: string } | undefined

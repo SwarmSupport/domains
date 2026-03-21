@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useDomainStore } from '@/stores/domains'
@@ -20,11 +20,17 @@ const newSubdomain = ref('')
 const selectedSuffix = ref('')
 const newPurpose = ref('')
 const addError = ref('')
-const filter = ref<'all' | 'active' | 'pending' | 'rejected'>('all')
+const filter = ref<'all' | 'active' | 'pending' | 'rejected' | 'suspended'>('all')
 const availableSuffixes = ref<string[]>([])
+const isLoading = ref(true)
 
 onMounted(async () => {
-  domainStore.fetchDomains()
+  // Wait for auth user to be loaded
+  if (!authStore.user) {
+    await authStore.fetchUser()
+  }
+  isLoading.value = false
+  await domainStore.fetchDomains()
   // Fetch available domain suffixes
   try {
     const { data } = await settingApi.get('DOMAIN_SUFFIXES')
@@ -36,8 +42,22 @@ onMounted(async () => {
   }
 })
 
+// Watch for user changes and refetch domains when user is loaded
+watch(() => authStore.user, (newUser) => {
+  if (newUser) {
+    domainStore.fetchDomains()
+  }
+})
+
 const filteredDomains = computed(() => {
-  const myDomains = domainStore.domains.filter(d => d.user_id === authStore.user?.id)
+  if (!authStore.user?.id) {
+    return []
+  }
+  const userId = authStore.user.id
+  const myDomains = domainStore.domains.filter(d => {
+    const domainUserId = d.user_id !== null && d.user_id !== undefined ? Number(d.user_id) : null
+    return domainUserId === userId
+  })
   if (filter.value === 'all') return myDomains
   return myDomains.filter(d => d.status === filter.value)
 })
@@ -50,6 +70,10 @@ async function handleAddDomain() {
   }
   if (!newSubdomain.value) {
     addError.value = t('domains.enterDomain')
+    return
+  }
+  if (!newPurpose.value || newPurpose.value.trim().length === 0) {
+    addError.value = t('domains.purposeRequired')
     return
   }
   // Combine subdomain and suffix (e.g., "mysite" + "example.com" = "mysite.example.com")
@@ -89,7 +113,7 @@ async function handleDelete(id: number) {
       </Button>
     </div>
 
-    <div v-if="domainStore.loading" class="loading">{{ t('common.loading') }}</div>
+    <div v-if="isLoading" class="loading">{{ t('common.loading') }}</div>
 
     <div v-else-if="filteredDomains.length === 0" class="empty-state">
       <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">

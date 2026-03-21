@@ -54,6 +54,9 @@ export const useAuthStore = defineStore('auth', () => {
       if (error.response?.status === 401) {
         return { success: false, error: 'Invalid credentials' }
       }
+      if (error.response?.status === 403) {
+        return { success: false, error: error.response?.data?.error || 'Account suspended' }
+      }
       console.error('Login error:', error)
       return { success: false, error: error.message || 'Network error' }
     } finally {

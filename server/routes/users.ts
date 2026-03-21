@@ -10,7 +10,7 @@ router.use(authMiddleware)
 // All user management routes require admin
 router.get('/', authMiddleware, adminMiddleware, (req, res) => {
   try {
-    const users = db.prepare('SELECT id, username, email, role, created_at, email_verified FROM users').all()
+    const users = db.prepare('SELECT id, username, email, role, created_at, email_verified, banned FROM users').all()
     res.json({ success: true, data: users })
   } catch (error) {
     console.error('Error fetching users:', error)
@@ -69,22 +69,29 @@ router.post('/', authMiddleware, adminMiddleware, async (req, res) => {
 
 router.put('/:id', authMiddleware, adminMiddleware, (req, res) => {
   const { id } = req.params
-  const { role, email } = req.body
+  const { username, email, role } = req.body
 
   try {
     // Build update query dynamically
     const updates: string[] = []
     const values: any[] = []
 
-    if (role) {
-      if (!['user', 'admin'].includes(role)) {
-        return res.status(400).json({ success: false, error: 'Invalid role' })
+    if (username !== undefined) {
+      // Validate username (3-20 chars, alphanumeric and underscore)
+      const usernameRegex = /^[a-zA-Z0-9_]{3,20}$/
+      if (!usernameRegex.test(username)) {
+        return res.status(400).json({ success: false, error: 'Invalid username format' })
       }
-      updates.push('role = ?')
-      values.push(role)
+      // Check if username is already taken by another user
+      const existing = db.prepare('SELECT id FROM users WHERE username = ? AND id != ?').get(username, id)
+      if (existing) {
+        return res.status(400).json({ success: false, error: 'Username already taken' })
+      }
+      updates.push('username = ?')
+      values.push(username)
     }
 
-    if (email) {
+    if (email !== undefined) {
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       if (!emailRegex.test(email)) {
@@ -97,6 +104,14 @@ router.put('/:id', authMiddleware, adminMiddleware, (req, res) => {
       }
       updates.push('email = ?')
       values.push(email)
+    }
+
+    if (role !== undefined) {
+      if (!['user', 'admin'].includes(role)) {
+        return res.status(400).json({ success: false, error: 'Invalid role' })
+      }
+      updates.push('role = ?')
+      values.push(role)
     }
 
     if (updates.length === 0) {
@@ -158,6 +173,50 @@ router.delete('/:id', authMiddleware, adminMiddleware, (req, res) => {
   } catch (error) {
     console.error('Error deleting user:', error)
     res.status(500).json({ success: false, error: 'Failed to delete user' })
+  }
+})
+
+// Ban user
+router.put('/:id/ban', authMiddleware, adminMiddleware, (req, res) => {
+  const { id } = req.params
+
+  if (req.user?.id === parseInt(id)) {
+    return res.status(400).json({ success: false, error: 'Cannot ban yourself' })
+  }
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any
+  if (!user) {
+    return res.status(404).json({ success: false, error: 'User not found' })
+  }
+
+  if (user.role === 'admin') {
+    return res.status(400).json({ success: false, error: 'Cannot ban an admin' })
+  }
+
+  try {
+    db.prepare('UPDATE users SET banned = 1 WHERE id = ?').run(id)
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error banning user:', error)
+    res.status(500).json({ success: false, error: 'Failed to ban user' })
+  }
+})
+
+// Unban user
+router.put('/:id/unban', authMiddleware, adminMiddleware, (req, res) => {
+  const { id } = req.params
+
+  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(id) as any
+  if (!user) {
+    return res.status(404).json({ success: false, error: 'User not found' })
+  }
+
+  try {
+    db.prepare('UPDATE users SET banned = 0 WHERE id = ?').run(id)
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Error unbanning user:', error)
+    res.status(500).json({ success: false, error: 'Failed to unban user' })
   }
 })
 

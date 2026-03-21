@@ -111,6 +111,11 @@ router.post('/login', async (req, res) => {
     return res.status(401).json({ success: false, error: 'Invalid email or password' })
   }
 
+  // Check if user is banned
+  if (user.banned) {
+    return res.status(403).json({ success: false, error: 'Your account has been suspended. Please contact the administrator.' })
+  }
+
   // Check email verification if email is enabled
   if (isEmailVerificationRequired() && !user.email_verified) {
     return res.status(401).json({

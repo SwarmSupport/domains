@@ -25,6 +25,7 @@ const addLoading = ref(false)
 // Edit User Modal
 const showEditModal = ref(false)
 const editingUser = ref<User | null>(null)
+const editUsername = ref('')
 const editEmail = ref('')
 const editRole = ref<'user' | 'admin'>('user')
 const editError = ref('')
@@ -91,6 +92,7 @@ async function handleAddUser() {
 // Edit User
 function openEditModal(user: User) {
   editingUser.value = user
+  editUsername.value = user.username
   editEmail.value = user.email
   editRole.value = user.role
   editError.value = ''
@@ -102,6 +104,14 @@ async function handleUpdateUser() {
 
   editError.value = ''
 
+  // Validate username if changed
+  if (editUsername.value !== editingUser.value.username) {
+    if (editUsername.value.length < 3 || editUsername.value.length > 20) {
+      editError.value = t('auth.usernameLength')
+      return
+    }
+  }
+
   // Validate email if changed
   if (editEmail.value !== editingUser.value.email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -112,13 +122,18 @@ async function handleUpdateUser() {
   }
 
   // Only update if something changed
-  if (editEmail.value === editingUser.value.email && editRole.value === editingUser.value.role) {
+  if (
+    editUsername.value === editingUser.value.username &&
+    editEmail.value === editingUser.value.email &&
+    editRole.value === editingUser.value.role
+  ) {
     editError.value = t('admin.settings.noChanges')
     return
   }
 
   editLoading.value = true
   const success = await userStore.updateUser(editingUser.value.id, {
+    username: editUsername.value !== editingUser.value.username ? editUsername.value : undefined,
     email: editEmail.value !== editingUser.value.email ? editEmail.value : undefined,
     role: editRole.value !== editingUser.value.role ? editRole.value : undefined
   } as Partial<User>)
@@ -127,6 +142,10 @@ async function handleUpdateUser() {
   if (success) {
     showEditModal.value = false
     await userStore.fetchUsers()
+    // If current user's data was updated, refresh auth store
+    if (editingUser.value.id === authStore.user?.id) {
+      await authStore.fetchUser()
+    }
   } else {
     editError.value = t('admin.users.updateFailed')
   }
@@ -182,6 +201,22 @@ async function handleDeleteUser(id: number) {
     await userStore.deleteUser(id)
   }
 }
+
+// Ban User
+async function handleBanUser(id: number) {
+  if (id === authStore.user?.id) {
+    alert(t('admin.users.cannotBanSelf'))
+    return
+  }
+  if (confirm(t('admin.users.banConfirm'))) {
+    await userStore.banUser(id)
+  }
+}
+
+// Unban User
+async function handleUnbanUser(id: number) {
+  await userStore.unbanUser(id)
+}
 </script>
 
 <template>
@@ -218,7 +253,10 @@ async function handleDeleteUser(id: number) {
         <tbody>
           <tr v-for="user in userStore.users" :key="user.id">
             <td>{{ user.id }}</td>
-            <td class="username-cell">{{ user.username }}</td>
+            <td class="username-cell">
+              {{ user.username }}
+              <span v-if="user.banned" class="status-badge banned">{{ t('admin.users.banned') }}</span>
+            </td>
             <td>{{ user.email }}</td>
             <td>
               <span class="role-badge" :class="user.role">
@@ -232,6 +270,22 @@ async function handleDeleteUser(id: number) {
               </Button>
               <Button size="sm" variant="secondary" @click="openPasswordModal(user)">
                 {{ t('admin.users.resetPassword') }}
+              </Button>
+              <Button
+                v-if="user.banned"
+                size="sm"
+                @click="handleUnbanUser(user.id)"
+              >
+                {{ t('admin.users.unban') }}
+              </Button>
+              <Button
+                v-else-if="user.role !== 'admin'"
+                size="sm"
+                variant="danger"
+                @click="handleBanUser(user.id)"
+                :disabled="user.id === authStore.user?.id"
+              >
+                {{ t('admin.users.ban') }}
               </Button>
               <Button
                 size="sm"
@@ -285,9 +339,11 @@ async function handleDeleteUser(id: number) {
     <!-- Edit User Modal -->
     <Modal v-model:show="showEditModal" :title="t('admin.users.editUser')">
       <div class="modal-form">
-        <div class="edit-info">
-          <strong>{{ editingUser?.username }}</strong>
-        </div>
+        <InputField
+          v-model="editUsername"
+          :label="t('admin.users.username')"
+          :placeholder="t('auth.usernamePlaceholder')"
+        />
         <InputField
           v-model="editEmail"
           :label="t('auth.email')"
@@ -418,6 +474,20 @@ async function handleDeleteUser(id: number) {
 .role-badge.user {
   background: rgba(139, 163, 185, 0.15);
   color: var(--color-text-secondary);
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 6px;
+}
+
+.status-badge.banned {
+  background: rgba(255, 100, 100, 0.15);
+  color: var(--color-danger);
 }
 
 .actions-cell {

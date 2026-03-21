@@ -4,6 +4,7 @@ export interface User {
   email: string
   role: 'user' | 'admin'
   email_verified?: number
+  banned?: number
   created_at: string
 }
 
@@ -18,6 +19,7 @@ export interface Domain {
   rejection_reason?: string
   expires_at: string
   dnspod_domain_id: string | null
+  suspended?: number
   created_at: string
 }
 

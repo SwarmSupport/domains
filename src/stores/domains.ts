@@ -77,6 +77,51 @@ export const useDomainStore = defineStore('domains', () => {
     }
   }
 
+  async function suspendDomain(id: number) {
+    try {
+      const { data } = await domainApi.suspend(id)
+      if (data.success) {
+        const index = domains.value.findIndex(d => d.id === id)
+        if (index !== -1 && domains.value[index]) {
+          domains.value[index].suspended = 1
+        }
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  async function resumeDomain(id: number) {
+    try {
+      const { data } = await domainApi.resume(id)
+      if (data.success) {
+        const index = domains.value.findIndex(d => d.id === id)
+        if (index !== -1 && domains.value[index]) {
+          domains.value[index].suspended = 0
+        }
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
+  async function deleteFromDnspod(id: number) {
+    try {
+      const { data } = await domainApi.deleteFromDnspod(id)
+      if (data.success) {
+        domains.value = domains.value.filter(d => d.id !== id)
+        return true
+      }
+      return false
+    } catch {
+      return false
+    }
+  }
+
   async function fetchRecords(domainName: string) {
     loading.value = true
     error.value = null
@@ -144,6 +189,9 @@ export const useDomainStore = defineStore('domains', () => {
     deleteDomain,
     approveDomain,
     rejectDomain,
+    suspendDomain,
+    resumeDomain,
+    deleteFromDnspod,
     fetchRecords,
     createRecord,
     updateRecord,

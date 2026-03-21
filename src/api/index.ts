@@ -87,7 +87,9 @@ export const userApi = {
     api.post<ApiResponse<{ id: number; username: string; email: string; role: string }>>('/users', data),
   update: (id: number, data: Partial<User>) => api.put<ApiResponse>(`/users/${id}`, data),
   updatePassword: (id: number, password: string) => api.put<ApiResponse>(`/users/${id}/password`, { password }),
-  delete: (id: number) => api.delete<ApiResponse>(`/users/${id}`)
+  delete: (id: number) => api.delete<ApiResponse>(`/users/${id}`),
+  ban: (id: number) => api.put<ApiResponse>(`/users/${id}/ban`),
+  unban: (id: number) => api.put<ApiResponse>(`/users/${id}/unban`)
 }
 
 export const domainApi = {
@@ -96,7 +98,10 @@ export const domainApi = {
   update: (id: number, data: Partial<Domain>) => api.put<ApiResponse>(`/domains/${id}`, data),
   delete: (id: number) => api.delete<ApiResponse>(`/domains/${id}`),
   approve: (id: number, userId: number) => api.post<ApiResponse>(`/domains/${id}/approve`, { userId }),
-  reject: (id: number, reason?: string) => api.post<ApiResponse>(`/domains/${id}/reject`, { reason })
+  reject: (id: number, reason?: string) => api.post<ApiResponse>(`/domains/${id}/reject`, { reason }),
+  suspend: (id: number) => api.post<ApiResponse>(`/domains/${id}/suspend`),
+  resume: (id: number) => api.post<ApiResponse>(`/domains/${id}/resume`),
+  deleteFromDnspod: (id: number) => api.delete<ApiResponse>(`/domains/${id}/dnspod`)
 }
 
 export const dnsApi = {

@@ -24,7 +24,8 @@ onMounted(() => {
 })
 
 const pendingDomains = computed(() => domainStore.domains.filter(d => d.status === 'pending'))
-const assignedDomains = computed(() => domainStore.domains.filter(d => d.status === 'active'))
+const assignedDomains = computed(() => domainStore.domains.filter(d => d.status === 'active' && !d.suspended))
+const suspendedDomains = computed(() => domainStore.domains.filter(d => d.status === 'active' && d.suspended))
 
 function openApproveModal(domainId: number) {
   selectedDomainId.value = domainId
@@ -58,9 +59,25 @@ async function handleReject() {
   }
 }
 
+async function handleSuspend(id: number) {
+  if (confirm(t('admin.domains.suspendConfirm') + '?')) {
+    await domainStore.suspendDomain(id)
+  }
+}
+
+async function handleResume(id: number) {
+  await domainStore.resumeDomain(id)
+}
+
 async function handleDelete(id: number) {
   if (confirm(t('common.delete') + '?')) {
     await domainStore.deleteDomain(id)
+  }
+}
+
+async function handleDeleteFromDnspod(id: number) {
+  if (confirm(t('admin.domains.deleteFromDnspodConfirm') + '?')) {
+    await domainStore.deleteFromDnspod(id)
   }
 }
 
@@ -130,7 +147,39 @@ function getUsername(userId: number | null) {
             <td>{{ getUsername(domain.user_id) }}</td>
             <td>{{ new Date(domain.expires_at).toLocaleDateString() }}</td>
             <td class="actions-cell">
+              <Button size="sm" variant="secondary" @click="handleSuspend(domain.id)">{{ t('admin.domains.suspend') }}</Button>
               <Button size="sm" variant="danger" @click="handleDelete(domain.id)">{{ t('common.delete') }}</Button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </Card>
+
+    <Card customClass="mt-4">
+      <template #header>
+        <h3>{{ t('admin.domains.suspendedDomains') }} ({{ suspendedDomains.length }})</h3>
+      </template>
+
+      <div v-if="suspendedDomains.length === 0" class="empty-state">
+        <p>{{ t('admin.domains.noSuspendedDomains') }}</p>
+      </div>
+      <table v-else class="domains-table">
+        <thead>
+          <tr>
+            <th>{{ t('domains.domainName') }}</th>
+            <th>{{ t('admin.domains.applicant') }}</th>
+            <th>{{ t('domains.expiresAt') }}</th>
+            <th>{{ t('common.actions') }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="domain in suspendedDomains" :key="domain.id">
+            <td class="domain-name suspended">{{ domain.name }}</td>
+            <td>{{ getUsername(domain.user_id) }}</td>
+            <td>{{ new Date(domain.expires_at).toLocaleDateString() }}</td>
+            <td class="actions-cell">
+              <Button size="sm" @click="handleResume(domain.id)">{{ t('admin.domains.resume') }}</Button>
+              <Button size="sm" variant="danger" @click="handleDeleteFromDnspod(domain.id)">{{ t('admin.domains.deleteFromDnspod') }}</Button>
             </td>
           </tr>
         </tbody>
@@ -212,6 +261,11 @@ function getUsername(userId: number | null) {
 
 .domain-name {
   font-weight: 500;
+}
+
+.domain-name.suspended {
+  text-decoration: line-through;
+  color: var(--color-text-secondary);
 }
 
 .actions-cell {

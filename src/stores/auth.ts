@@ -32,19 +32,10 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = data.data.user
       localStorage.setItem('token', data.data.token)
 
-      // Verify token is valid by calling /auth/me
-      try {
-        const { data: userData } = await authApi.getMe()
-        if (userData.success && userData.data) {
-          user.value = userData.data
-          return { success: true }
-        }
-      } catch (verifyError: any) {
-        // Token verification failed - clear auth state
-        console.warn('Token verification failed after login')
-        token.value = null
-        user.value = null
-        localStorage.removeItem('token')
+      // Verify token is valid by calling /auth/me and wait for result
+      const fetchSuccess = await fetchUser()
+      if (!fetchSuccess) {
+        // fetchUser failed (cleared auth state), don't return success
         return { success: false, error: 'Session invalid, please login again' }
       }
 

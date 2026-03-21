@@ -163,7 +163,7 @@ async function handleSaveEmail() {
             <p class="field-desc">{{ t('admin.settings.dnspodDesc') }}</p>
             <InputField
               v-model="dnspodSecretId"
-              :placeholder="t('admin.settings.dnspodSecretIdPlaceholder')"
+              placeholder="AKIDxxxxxxxxxxxxxxxxxxxxx"
             />
           </div>
 
@@ -172,7 +172,7 @@ async function handleSaveEmail() {
             <InputField
               v-model="dnspodSecretKey"
               type="password"
-              :placeholder="t('admin.settings.dnspodSecretKeyPlaceholder')"
+              placeholder="xxxxxxxxxxxxxxxxxxxxx"
             />
           </div>
 
@@ -212,13 +212,13 @@ async function handleSaveEmail() {
           <InputField
             v-model="turnstileSiteKey"
             :label="t('admin.settings.turnstileSiteKey')"
-            :placeholder="t('admin.settings.turnstileSiteKeyPlaceholder')"
+            placeholder="0xxx..."
           />
           <InputField
             v-model="turnstileSecretKey"
             :label="t('admin.settings.turnstileSecretKey')"
             type="password"
-            :placeholder="t('admin.settings.turnstileSecretKeyPlaceholder')"
+            placeholder="0xxx..."
           />
         </div>
 
@@ -248,17 +248,17 @@ async function handleSaveEmail() {
             v-model="resendApiKey"
             :label="t('admin.settings.resendApiKey')"
             type="password"
-            :placeholder="t('admin.settings.resendApiKeyPlaceholder')"
+            placeholder="re_xxx..."
           />
           <InputField
             v-model="resendDomain"
             :label="t('admin.settings.resendDomain')"
-            :placeholder="t('admin.settings.resendDomainPlaceholder')"
+            placeholder="domain.com"
           />
           <InputField
             v-model="fromEmail"
             :label="t('admin.settings.fromEmail')"
-            :placeholder="t('admin.settings.fromEmailPlaceholder')"
+            placeholder="noreply@domain.com"
           />
         </div>
 

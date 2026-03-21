@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useDomainStore } from '@/stores/domains'
+import { useI18n } from 'vue-i18n'
 import Card from '@/components/Card.vue'
 import Button from '@/components/Button.vue'
 import InputField from '@/components/InputField.vue'
@@ -10,6 +11,7 @@ import type { DnsRecord } from '@/types'
 
 const route = useRoute()
 const domainStore = useDomainStore()
+const { t } = useI18n()
 
 const domainName = computed(() => route.params.domain as string)
 
@@ -73,7 +75,7 @@ async function handleUpdateRecord() {
 }
 
 async function handleDeleteRecord(id: number) {
-  if (confirm('确定要删除这条记录吗？')) {
+  if (confirm(t('dns.deleteRecordConfirm'))) {
     await domainStore.deleteRecord(domainName.value, id)
   }
 }
@@ -90,34 +92,34 @@ async function handleDeleteRecord(id: number) {
         </router-link>
         <div>
           <h1>{{ domainName }}</h1>
-          <p class="subtitle">DNS 解析记录管理</p>
+          <p class="subtitle">{{ t('dns.subtitle') }}</p>
         </div>
       </div>
       <Button @click="showAddModal = true">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
-        添加记录
+        {{ t('dns.addRecord') }}
       </Button>
     </div>
 
     <Card>
-      <div v-if="domainStore.loading" class="loading">加载中...</div>
+      <div v-if="domainStore.loading" class="loading">{{ t('common.loading') }}</div>
       <div v-else-if="domainStore.records.length === 0" class="empty-state">
         <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M12 18v-6M9 15h6"/>
         </svg>
-        <p>暂无解析记录</p>
+        <p>{{ t('dns.noRecords') }}</p>
       </div>
       <table v-else class="records-table">
         <thead>
           <tr>
-            <th>主机记录</th>
-            <th>记录类型</th>
-            <th>记录值</th>
-            <th>优先级</th>
-            <th>TTL</th>
-            <th>操作</th>
+            <th>{{ t('dns.recordName') }}</th>
+            <th>{{ t('dns.recordType') }}</th>
+            <th>{{ t('dns.recordValue') }}</th>
+            <th>{{ t('dns.recordPriority') }}</th>
+            <th>{{ t('dns.recordTTL') }}</th>
+            <th>{{ t('common.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -144,48 +146,48 @@ async function handleDeleteRecord(id: number) {
       </table>
     </Card>
 
-    <Modal v-model:show="showAddModal" title="添加解析记录">
+    <Modal v-model:show="showAddModal" :title="t('dns.addRecordTitle')">
       <form @submit.prevent="handleAddRecord" class="record-form">
         <div class="form-row">
-          <InputField v-model="form.name" label="主机记录" placeholder="例如: www 或 @"/>
+          <InputField v-model="form.name" :label="t('dns.recordName')" :placeholder="t('dns.recordNamePlaceholder')"/>
           <div class="select-field">
-            <label>记录类型</label>
+            <label>{{ t('dns.recordType') }}</label>
             <select v-model="form.type">
               <option v-for="type in recordTypes" :key="type" :value="type">{{ type }}</option>
             </select>
           </div>
         </div>
-        <InputField v-model="form.value" label="记录值" placeholder="例如: 192.168.1.1"/>
+        <InputField v-model="form.value" :label="t('dns.recordValue')" :placeholder="t('dns.recordValuePlaceholder')"/>
         <div class="form-row">
-          <InputField v-model.number="form.priority" type="number" label="优先级" placeholder="10"/>
-          <InputField v-model.number="form.ttl" type="number" label="TTL" placeholder="600"/>
+          <InputField v-model.number="form.priority" type="number" :label="t('dns.recordPriority')" :placeholder="t('dns.recordPriorityPlaceholder')"/>
+          <InputField v-model.number="form.ttl" type="number" :label="t('dns.recordTTL')" :placeholder="t('dns.recordTTLPlaceholder')"/>
         </div>
         <div class="form-actions">
-          <Button variant="secondary" type="button" @click="showAddModal = false; resetForm()">取消</Button>
-          <Button type="submit">添加</Button>
+          <Button variant="secondary" type="button" @click="showAddModal = false; resetForm()">{{ t('common.cancel') }}</Button>
+          <Button type="submit">{{ t('common.add') }}</Button>
         </div>
       </form>
     </Modal>
 
-    <Modal v-model:show="showEditModal" title="编辑解析记录">
+    <Modal v-model:show="showEditModal" :title="t('dns.editRecordTitle')">
       <form @submit.prevent="handleUpdateRecord" class="record-form">
         <div class="form-row">
-          <InputField v-model="form.name" label="主机记录" placeholder="例如: www 或 @"/>
+          <InputField v-model="form.name" :label="t('dns.recordName')" :placeholder="t('dns.recordNamePlaceholder')"/>
           <div class="select-field">
-            <label>记录类型</label>
+            <label>{{ t('dns.recordType') }}</label>
             <select v-model="form.type">
               <option v-for="type in recordTypes" :key="type" :value="type">{{ type }}</option>
             </select>
           </div>
         </div>
-        <InputField v-model="form.value" label="记录值" placeholder="例如: 192.168.1.1"/>
+        <InputField v-model="form.value" :label="t('dns.recordValue')" :placeholder="t('dns.recordValuePlaceholder')"/>
         <div class="form-row">
-          <InputField v-model.number="form.priority" type="number" label="优先级" placeholder="10"/>
-          <InputField v-model.number="form.ttl" type="number" label="TTL" placeholder="600"/>
+          <InputField v-model.number="form.priority" type="number" :label="t('dns.recordPriority')" :placeholder="t('dns.recordPriorityPlaceholder')"/>
+          <InputField v-model.number="form.ttl" type="number" :label="t('dns.recordTTL')" :placeholder="t('dns.recordTTLPlaceholder')"/>
         </div>
         <div class="form-actions">
-          <Button variant="secondary" type="button" @click="showEditModal = false; resetForm()">取消</Button>
-          <Button type="submit">保存</Button>
+          <Button variant="secondary" type="button" @click="showEditModal = false; resetForm()">{{ t('common.cancel') }}</Button>
+          <Button type="submit">{{ t('common.save') }}</Button>
         </div>
       </form>
     </Modal>

@@ -19,7 +19,7 @@ function getSetting(key: string): string | null {
 
 function isEmailEnabled(): boolean {
   const enabled = getSetting('EMAIL_ENABLED')
-  return enabled !== 'false' && enabled !== '0'
+  return enabled === 'true'
 }
 
 function isEmailVerificationRequired(): boolean {
@@ -99,15 +99,20 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ success: false, error: 'Invalid email format' })
   }
 
-  // Verify Turnstile
+  // Verify Turnstile (skip if disabled or not configured)
   const turnstileValid = await verifyTurnstile(turnstileToken || '')
   if (!turnstileValid) {
-    return res.status(400).json({ success: false, error: 'Turnstile verification failed' })
+    return res.status(400).json({ success: false, error: 'Turnstile verification failed. Please try again.' })
   }
 
   // Use case-insensitive email lookup
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email.toLowerCase()) as any
-  if (!user || !bcrypt.compareSync(password, user.password)) {
+  if (!user) {
+    return res.status(401).json({ success: false, error: 'Invalid email or password' })
+  }
+
+  // Verify password
+  if (!bcrypt.compareSync(password, user.password)) {
     return res.status(401).json({ success: false, error: 'Invalid email or password' })
   }
 

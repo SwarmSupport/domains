@@ -138,6 +138,18 @@ export function initDatabase() {
     console.warn('Migration check for suspended failed:', err)
   }
 
+  // Migration: Add purpose column to domains if it doesn't exist
+  try {
+    const domainColumns = db.prepare("PRAGMA table_info(domains)").all() as { name: string }[]
+    const hasPurpose = domainColumns.some(col => col.name === 'purpose')
+    if (!hasPurpose) {
+      db.exec('ALTER TABLE domains ADD COLUMN purpose TEXT')
+      console.log('Migration: Added purpose column to domains table')
+    }
+  } catch (err) {
+    console.warn('Migration check for purpose failed:', err)
+  }
+
   // Ensure admin user exists and always has admin role
   const adminEmail = 'admin@example.com'
   const admin = db.prepare('SELECT id, role FROM users WHERE email = ?').get(adminEmail) as { id: number; role: string } | undefined

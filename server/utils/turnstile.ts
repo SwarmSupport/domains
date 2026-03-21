@@ -12,7 +12,7 @@ function getSetting(key: string): string | null {
 
 function isTurnstileEnabled(): boolean {
   const enabled = getSetting('TURNSTILE_ENABLED')
-  return enabled !== 'false' && enabled !== '0'
+  return enabled === 'true'
 }
 
 export async function verifyTurnstile(token: string): Promise<boolean> {
@@ -21,18 +21,22 @@ export async function verifyTurnstile(token: string): Promise<boolean> {
     return true
   }
 
+  // If Turnstile is not enabled, skip verification
   if (!isTurnstileEnabled()) {
     console.warn('Turnstile is disabled, skipping verification')
     return true
   }
 
+  // If no secret key is configured, skip verification (allow login)
   const secretKey = getSetting('TURNSTILE_SECRET_KEY')
-  if (!secretKey) {
+  if (!secretKey || secretKey.trim() === '') {
     console.warn('Turnstile secret key not configured, skipping verification')
     return true
   }
 
+  // If no token provided but Turnstile is enabled, fail
   if (!token) {
+    console.warn('Turnstile token not provided')
     return false
   }
 

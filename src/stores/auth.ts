@@ -50,9 +50,14 @@ export const useAuthStore = defineStore('auth', () => {
       const { data } = await authApi.getMe()
       if (data.success && data.data) {
         user.value = data.data
+      } else {
+        // API returned error, clear token
+        logout()
       }
     } catch {
-      logout()
+      // Network error - don't logout immediately, keep the token
+      // The API interceptor will handle 401 responses
+      console.warn('Failed to fetch user info')
     }
   }
 

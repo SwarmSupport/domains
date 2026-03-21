@@ -69,11 +69,20 @@ const router = createRouter({
   ]
 })
 
+let isInitializing = false
+let userFetchPromise: Promise<void> | null = null
+
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
-  if (authStore.isLoggedIn && !authStore.user) {
-    await authStore.fetchUser()
+  // Only fetch user once on initial load, not on every navigation
+  if (authStore.isLoggedIn && !authStore.user && !isInitializing) {
+    isInitializing = true
+    userFetchPromise = authStore.fetchUser()
+      .finally(() => {
+        userFetchPromise = null
+      })
+    await userFetchPromise
   }
 
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {

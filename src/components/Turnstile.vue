@@ -33,6 +33,9 @@ declare global {
 }
 
 let widgetId: string | null = null
+let timeoutId: ReturnType<typeof setTimeout> | null = null
+
+const LOAD_TIMEOUT = 10000 // 10 seconds
 
 onMounted(() => {
   // If no site key or empty, skip Turnstile (disabled)
@@ -49,7 +52,21 @@ onMounted(() => {
   script.defer = true
   document.head.appendChild(script)
 
+  // Set timeout for script load
+  timeoutId = setTimeout(() => {
+    if (!isLoaded.value) {
+      error.value = 'Failed to load Turnstile. Please check your connection.'
+      isLoaded.value = true
+      emit('error', error.value)
+    }
+  }, LOAD_TIMEOUT)
+
   script.onload = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
+
     if (window.turnstile && props.siteKey) {
       widgetId = window.turnstile.render(`#${containerId}`, {
         sitekey: props.siteKey,
@@ -70,11 +87,26 @@ onMounted(() => {
           emit('update:modelValue', '')
         }
       })
+      isLoaded.value = true
     }
+  }
+
+  script.onerror = () => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
+    error.value = 'Failed to load Turnstile script. Please check your connection or try again later.'
+    isLoaded.value = true
+    emit('error', error.value)
   }
 })
 
 onUnmounted(() => {
+  if (timeoutId) {
+    clearTimeout(timeoutId)
+    timeoutId = null
+  }
   if (widgetId && window.turnstile) {
     window.turnstile.remove(widgetId)
   }

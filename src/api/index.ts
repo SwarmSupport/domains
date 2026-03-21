@@ -22,7 +22,8 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      window.location.href = '/login'
+      // Use pushState instead of window.location.href to avoid page refresh
+      window.history.pushState(null, '', '/login')
     }
     return Promise.reject(error)
   }

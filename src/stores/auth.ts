@@ -16,16 +16,46 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     try {
       const { data } = await authApi.login({ email, password, turnstileToken })
-      if (data.success && data.data) {
-        token.value = data.data.token
-        user.value = data.data.user
-        localStorage.setItem('token', data.data.token)
-        return { success: true }
-      }
+
+      // Handle email verification required
       if (data.needsVerification) {
         return { success: false, needsVerification: true }
       }
-      return { success: false, error: data.error }
+
+      // Must have success and valid data with token and user
+      if (!data.success || !data.data?.token || !data.data?.user) {
+        return { success: false, error: data.error || 'Login failed' }
+      }
+
+      // Set token and user
+      token.value = data.data.token
+      user.value = data.data.user
+      localStorage.setItem('token', data.data.token)
+
+      // Verify token is valid by calling /auth/me
+      try {
+        const { data: userData } = await authApi.getMe()
+        if (userData.success && userData.data) {
+          user.value = userData.data
+          return { success: true }
+        }
+      } catch (verifyError: any) {
+        // Token verification failed - clear auth state
+        console.warn('Token verification failed after login')
+        token.value = null
+        user.value = null
+        localStorage.removeItem('token')
+        return { success: false, error: 'Session invalid, please login again' }
+      }
+
+      return { success: true }
+    } catch (error: any) {
+      // Handle network errors or API errors
+      if (error.response?.status === 401) {
+        return { success: false, error: 'Invalid credentials' }
+      }
+      console.error('Login error:', error)
+      return { success: false, error: error.message || 'Network error' }
     } finally {
       loading.value = false
     }
@@ -45,19 +75,33 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function fetchUser() {
+    // If no token, do nothing
     if (!token.value) return
+
     try {
       const { data } = await authApi.getMe()
       if (data.success && data.data) {
         user.value = data.data
+        return true
       } else {
-        // API returned error, clear token
-        logout()
+        // API returned an error response (but not 401)
+        user.value = null
+        token.value = null
+        localStorage.removeItem('token')
+        return false
       }
-    } catch {
-      // Network error - don't logout immediately, keep the token
-      // The API interceptor will handle 401 responses
-      console.warn('Failed to fetch user info')
+    } catch (error: any) {
+      // If 401, the token is invalid - clear everything
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.warn('Token invalid or expired')
+        user.value = null
+        token.value = null
+        localStorage.removeItem('token')
+      } else {
+        // Network error or other error - keep user state but log warning
+        console.warn('Failed to fetch user:', error.message)
+      }
+      return false
     }
   }
 
@@ -65,6 +109,16 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     token.value = null
     localStorage.removeItem('token')
+  }
+
+  // When token changes externally (e.g., cleared by API interceptor), sync user state
+  function syncAuthState() {
+    const storedToken = localStorage.getItem('token')
+    if (!storedToken && token.value) {
+      // Token was cleared externally
+      token.value = null
+      user.value = null
+    }
   }
 
   return {
@@ -77,6 +131,7 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     register,
     fetchUser,
-    logout
+    logout,
+    syncAuthState
   }
 })

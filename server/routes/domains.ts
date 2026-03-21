@@ -134,7 +134,7 @@ router.delete('/:id', authMiddleware, (req: AuthRequest, res) => {
   res.json({ success: true })
 })
 
-router.post('/:id/approve', adminMiddleware, async (req: AuthRequest, res) => {
+router.post('/:id/approve', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
   const { id } = req.params
   const { userId } = req.body
 
@@ -175,7 +175,7 @@ router.post('/:id/approve', adminMiddleware, async (req: AuthRequest, res) => {
   res.json({ success: true, data: updated })
 })
 
-router.post('/:id/reject', adminMiddleware, async (req: AuthRequest, res) => {
+router.post('/:id/reject', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
   const { id } = req.params
   const { reason } = req.body
 

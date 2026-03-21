@@ -1,30 +1,76 @@
 import axios from 'axios'
 import type { ApiResponse, User, Domain, DnsRecord, LoginForm, RegisterForm } from '@/types'
 
+// Generate a unique request ID for tracing
+function generateRequestId(): string {
+  return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
+}
+
 const api = axios.create({
   baseURL: '/api',
-  timeout: 10000,
+  timeout: 15000,
   headers: {
     'Content-Type': 'application/json'
   }
 })
 
+// Add request ID to all requests for tracing
 api.interceptors.request.use((config) => {
+  // Add request ID header for debugging
+  config.headers['X-Request-ID'] = generateRequestId()
+
+  // Add CSRF token if available (for same-origin requests)
+  const csrfToken = document.cookie.match(/csrftoken=([^;]+)/)?.[1]
+  if (csrfToken) {
+    config.headers['X-CSRF-Token'] = csrfToken
+  }
+
+  // Add auth token from localStorage
   const token = localStorage.getItem('token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+
   return config
 })
 
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('token')
-      // Use pushState instead of window.location.href to avoid page refresh
-      window.history.pushState(null, '', '/login')
+    const requestId = error.config?.headers?.['X-Request-ID']
+    const url = error.config?.url || 'unknown'
+    const status = error.response?.status
+
+    // Log error for debugging (only in non-production)
+    if (import.meta.env.DEV) {
+      console.error(`[API Error] ${status} - ${error.message}`, {
+        url,
+        requestId,
+        data: error.response?.data
+      })
     }
+
+    // Handle 401 errors
+    if (status === 401) {
+      // Get current path
+      const currentPath = window.location.pathname
+
+      // If we're already on the login page or don't have a token,
+      // don't trigger logout/navigation - just reject the promise
+      const hasToken = !!localStorage.getItem('token')
+      if (currentPath === '/login' || !hasToken) {
+        return Promise.reject(error)
+      }
+
+      // Clear token and redirect to login
+      localStorage.removeItem('token')
+
+      // Only redirect if not already on login page
+      if (currentPath !== '/login') {
+        window.location.href = '/login'
+      }
+    }
+
     return Promise.reject(error)
   }
 )

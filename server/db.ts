@@ -1,11 +1,23 @@
 import Database from 'better-sqlite3'
 import bcrypt from 'bcryptjs'
 import path from 'path'
+import fs from 'fs'
 
-const dbPath = path.join(process.cwd(), 'data.db')
+const dbDir = process.cwd()
+const dbPath = path.join(dbDir, 'data.db')
+
+// Ensure database directory exists
+if (!fs.existsSync(dbDir)) {
+  fs.mkdirSync(dbDir, { recursive: true })
+}
+
 const db = new Database(dbPath)
 
+// Enable WAL mode for better performance
+db.pragma('journal_mode = WAL')
+
 export function initDatabase() {
+  // Create tables
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -58,25 +70,83 @@ export function initDatabase() {
     );
   `)
 
-  const adminExists = db.prepare('SELECT id FROM users WHERE role = ?').get('admin')
-  if (!adminExists) {
+  // Create indexes for better performance
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_domains_user_id ON domains(user_id);
+    CREATE INDEX IF NOT EXISTS idx_domains_status ON domains(status);
+    CREATE INDEX IF NOT EXISTS idx_dns_records_domain_id ON dns_records(domain_id);
+    CREATE INDEX IF NOT EXISTS idx_email_tokens_email ON email_verification_tokens(email);
+  `)
+
+  // Migration: Add email_verified column if it doesn't exist (for existing databases)
+  try {
+    const userColumns = db.prepare("PRAGMA table_info(users)").all() as { name: string }[]
+    const hasEmailVerified = userColumns.some(col => col.name === 'email_verified')
+    if (!hasEmailVerified) {
+      db.exec('ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0')
+      console.log('Migration: Added email_verified column to users table')
+    }
+  } catch (err) {
+    console.warn('Migration check failed (this is normal for new databases):', err)
+  }
+
+  // Migration: Add rejection_reason column to domains if it doesn't exist
+  try {
+    const domainColumns = db.prepare("PRAGMA table_info(domains)").all() as { name: string }[]
+    const hasRejectionReason = domainColumns.some(col => col.name === 'rejection_reason')
+    if (!hasRejectionReason) {
+      db.exec('ALTER TABLE domains ADD COLUMN rejection_reason TEXT')
+      console.log('Migration: Added rejection_reason column to domains table')
+    }
+  } catch (err) {
+    console.warn('Migration check for rejection_reason failed:', err)
+  }
+
+  // Migration: Add dnspod_domain_id column to domains if it doesn't exist
+  try {
+    const domainColumns = db.prepare("PRAGMA table_info(domains)").all() as { name: string }[]
+    const hasDnspodDomainId = domainColumns.some(col => col.name === 'dnspod_domain_id')
+    if (!hasDnspodDomainId) {
+      db.exec('ALTER TABLE domains ADD COLUMN dnspod_domain_id TEXT')
+      console.log('Migration: Added dnspod_domain_id column to domains table')
+    }
+  } catch (err) {
+    console.warn('Migration check for dnspod_domain_id failed:', err)
+  }
+
+  // Ensure admin user exists and always has admin role
+  const adminEmail = 'admin@example.com'
+  const admin = db.prepare('SELECT id, role FROM users WHERE email = ?').get(adminEmail) as { id: number; role: string } | undefined
+
+  if (!admin) {
+    // Create admin if doesn't exist
     const hashedPassword = bcrypt.hashSync('admin123', 10)
     db.prepare(`
       INSERT INTO users (username, email, password, role, email_verified)
       VALUES (?, ?, ?, ?, 1)
-    `).run('admin', 'admin@example.com', hashedPassword, 'admin')
+    `).run('admin', adminEmail, hashedPassword, 'admin')
     console.log('Default admin created: admin@example.com / admin123')
+  } else if (admin.role !== 'admin') {
+    // Ensure existing admin user always has admin role
+    db.prepare('UPDATE users SET role = ? WHERE email = ?').run('admin', adminEmail)
+    console.log('Admin role ensured for admin@example.com')
   }
 
-  // Initialize default settings
+  // Initialize default settings with proper upsert (compatible with all SQLite versions)
   const defaultSettings = [
     ['TURNSTILE_ENABLED', 'false'],
     ['EMAIL_ENABLED', 'false'],
   ]
-  const insertSetting = db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)')
+
   for (const [key, value] of defaultSettings) {
-    insertSetting.run(key, value)
+    // Try update first, then insert if no rows affected
+    const updateResult = db.prepare('UPDATE settings SET value = ? WHERE key = ?').run(value, key)
+    if (updateResult.changes === 0) {
+      db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run(key, value)
+    }
   }
+
+  console.log('Database initialized successfully')
 }
 
 export default db

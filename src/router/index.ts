@@ -69,30 +69,49 @@ const router = createRouter({
   ]
 })
 
-let isInitializing = false
-let userFetchPromise: Promise<void> | null = null
+// Track if we're currently fetching user data during initialization
+let isFetchingUser = false
 
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
-  // Only fetch user once on initial load, not on every navigation
-  if (authStore.isLoggedIn && !authStore.user && !isInitializing) {
-    isInitializing = true
-    userFetchPromise = authStore.fetchUser()
-      .finally(() => {
-        userFetchPromise = null
-      })
-    await userFetchPromise
+  // Sync auth state with localStorage (in case it was modified externally)
+  authStore.syncAuthState()
+
+  // If logged in but user data not loaded yet, fetch it
+  // Use a flag to prevent multiple simultaneous fetches
+  if (authStore.isLoggedIn && !authStore.user && !isFetchingUser) {
+    isFetchingUser = true
+    try {
+      await authStore.fetchUser()
+    } catch (error) {
+      console.warn('Failed to fetch user during navigation:', error)
+    } finally {
+      isFetchingUser = false
+    }
   }
 
+  // Handle route access based on auth state
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
+    // Store intended destination for redirect after login
+    sessionStorage.setItem('redirectAfterLogin', to.fullPath)
     next('/login')
   } else if (to.meta.guest && authStore.isLoggedIn) {
     next('/dashboard')
   } else if (to.meta.requiresAdmin && !authStore.isAdmin) {
+    // User is logged in but not admin, redirect to dashboard
     next('/dashboard')
   } else {
     next()
+  }
+})
+
+// Handle successful login redirects
+router.afterEach((to, from) => {
+  // Check if we should redirect after login
+  const redirectPath = sessionStorage.getItem('redirectAfterLogin')
+  if (redirectPath && to.name === 'login') {
+    sessionStorage.removeItem('redirectAfterLogin')
   }
 })
 

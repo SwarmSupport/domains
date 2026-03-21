@@ -46,7 +46,14 @@ async function handleLogin() {
   const result = await authStore.login(email.value, password.value, turnstileToken.value)
 
   if (result.success) {
-    router.push('/dashboard')
+    // Check if there's a stored redirect path
+    const redirectPath = sessionStorage.getItem('redirectAfterLogin')
+    if (redirectPath) {
+      sessionStorage.removeItem('redirectAfterLogin')
+      router.push(redirectPath)
+    } else {
+      router.push('/dashboard')
+    }
   } else if (result.needsVerification) {
     error.value = t('auth.verificationRequired')
   } else {

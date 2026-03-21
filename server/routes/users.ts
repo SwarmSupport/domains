@@ -7,7 +7,8 @@ const router = Router()
 
 router.use(authMiddleware)
 
-router.get('/', adminMiddleware, (req, res) => {
+// All user management routes require admin
+router.get('/', authMiddleware, adminMiddleware, (req, res) => {
   try {
     const users = db.prepare('SELECT id, username, email, role, created_at, email_verified FROM users').all()
     res.json({ success: true, data: users })
@@ -17,7 +18,7 @@ router.get('/', adminMiddleware, (req, res) => {
   }
 })
 
-router.put('/:id', adminMiddleware, (req, res) => {
+router.put('/:id', authMiddleware, adminMiddleware, (req, res) => {
   const { id } = req.params
   const { role } = req.body
 
@@ -39,7 +40,7 @@ router.put('/:id', adminMiddleware, (req, res) => {
   }
 })
 
-router.put('/:id/password', adminMiddleware, async (req, res) => {
+router.put('/:id/password', authMiddleware, adminMiddleware, async (req, res) => {
   const { id } = req.params
   const { password } = req.body
 
@@ -62,7 +63,7 @@ router.put('/:id/password', adminMiddleware, async (req, res) => {
   }
 })
 
-router.delete('/:id', adminMiddleware, (req, res) => {
+router.delete('/:id', authMiddleware, adminMiddleware, (req, res) => {
   const { id } = req.params
 
   if (req.user?.id === parseInt(id)) {

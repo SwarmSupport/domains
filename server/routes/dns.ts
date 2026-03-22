@@ -51,12 +51,20 @@ router.post('/:domain/records', async (req: AuthRequest, res) => {
     ttl: ttl || 600
   })
 
+  // If DNSPod API failed (parent domain not found or other error), return error
+  if (!dnspodRecordId) {
+    return res.status(400).json({
+      success: false,
+      error: '无法在 DNSPod 创建记录，请确保顶级域名已在 DNSPod 中添加'
+    })
+  }
+
   const result = db.prepare(`
     INSERT INTO dns_records (domain_id, record_id, name, type, value, priority, ttl)
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     domainRecord.id,
-    dnspodRecordId || '',
+    dnspodRecordId,
     name,
     type,
     value,
@@ -87,14 +95,21 @@ router.put('/:domain/records/:id', async (req: AuthRequest, res) => {
     return res.status(404).json({ success: false, error: '记录不存在' })
   }
 
+  // If record has a DNSPod record_id, update it
   if (record.record_id) {
-    await updateRecord(domain, record.record_id, {
+    const updated = await updateRecord(domain, record.record_id, {
       name: name || record.name,
       type: type || record.type,
       value: value || record.value,
       priority: priority || record.priority,
       ttl: ttl || record.ttl
     })
+    if (!updated) {
+      return res.status(400).json({
+        success: false,
+        error: '无法在 DNSPod 更新记录，请确保顶级域名已在 DNSPod 中添加'
+      })
+    }
   }
 
   db.prepare(`
@@ -110,8 +125,8 @@ router.put('/:domain/records/:id', async (req: AuthRequest, res) => {
     id
   )
 
-  const updated = db.prepare('SELECT * FROM dns_records WHERE id = ?').get(id)
-  res.json({ success: true, data: updated })
+  const updatedRecord = db.prepare('SELECT * FROM dns_records WHERE id = ?').get(id)
+  res.json({ success: true, data: updatedRecord })
 })
 
 router.delete('/:domain/records/:id', async (req: AuthRequest, res) => {
@@ -131,8 +146,15 @@ router.delete('/:domain/records/:id', async (req: AuthRequest, res) => {
     return res.status(404).json({ success: false, error: '记录不存在' })
   }
 
+  // If record has a DNSPod record_id, delete it
   if (record.record_id) {
-    await deleteRecord(domain, record.record_id)
+    const deleted = await deleteRecord(domain, record.record_id)
+    if (!deleted) {
+      return res.status(400).json({
+        success: false,
+        error: '无法在 DNSPod 删除记录，请确保顶级域名已在 DNSPod 中添加'
+      })
+    }
   }
 
   db.prepare('DELETE FROM dns_records WHERE id = ?').run(id)

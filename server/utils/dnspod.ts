@@ -4,8 +4,8 @@ import db from '../db'
 // DNSPod API endpoint (International version)
 const DNSPOD_API_BASE = 'https://api.dnspod.com'
 
-// DNS record type
-interface DnspodRecord {
+// DNS record type returned by sync
+export interface DnspodRecord {
   id: string
   name: string
   type: string
@@ -39,6 +39,10 @@ interface DnspodDomain {
   name: string
 }
 
+// Cache for domain lookups to avoid repeated API calls
+const domainCache = new Map<string, { domain: DnspodDomain | null; timestamp: number }>()
+const CACHE_TTL = 60000 // 1 minute cache
+
 /**
  * Get DNSPod API token from database settings
  */
@@ -48,12 +52,22 @@ function getToken(): string | null {
 }
 
 /**
- * Get domain suffixes from settings
+ * Get domain suffixes from settings (cached)
  */
+let cachedSuffixes: string[] | null = null
+let suffixesCacheTime = 0
+
 function getDomainSuffixes(): string[] {
+  const now = Date.now()
+  if (cachedSuffixes && now - suffixesCacheTime < CACHE_TTL) {
+    return cachedSuffixes
+  }
   const setting = db.prepare('SELECT value FROM settings WHERE key = ?').get('DOMAIN_SUFFIXES') as { value: string } | undefined
-  if (!setting?.value) return []
-  return setting.value.split('\n').map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+  cachedSuffixes = setting?.value
+    ? setting.value.split('\n').map(s => s.trim().toLowerCase()).filter(s => s.length > 0)
+    : []
+  suffixesCacheTime = now
+  return cachedSuffixes
 }
 
 /**
@@ -101,7 +115,7 @@ async function dnspodRequest(action: string, params: Record<string, string | num
  * For example: "sub.example.com" with suffixes ["example.com"]
  * Returns { parentDomain: "example.com", subDomain: "sub" }
  */
-function extractParentAndSubDomain(fullDomain: string): { parentDomain: string; subDomain: string } | null {
+export function extractParentAndSubDomain(fullDomain: string): { parentDomain: string; subDomain: string } | null {
   const suffixes = getDomainSuffixes()
   const lowerDomain = fullDomain.toLowerCase()
 
@@ -129,35 +143,107 @@ function extractParentAndSubDomain(fullDomain: string): { parentDomain: string; 
 }
 
 /**
- * Find domain in DNSPod by name
+ * Find domain in DNSPod by name (with caching)
  */
 async function findDomainInDnspod(domainName: string): Promise<DnspodDomain | null> {
-  const listResult = await dnspodRequest('Domain.List', {})
-  const domain = listResult.domains?.find((d: any) => d.name.toLowerCase() === domainName.toLowerCase())
-  return domain || null
+  const now = Date.now()
+  const cached = domainCache.get(domainName.toLowerCase())
+
+  if (cached && now - cached.timestamp < CACHE_TTL) {
+    return cached.domain
+  }
+
+  try {
+    const listResult = await dnspodRequest('Domain.List', {})
+    const domain = listResult.domains?.find((d: any) => d.name.toLowerCase() === domainName.toLowerCase()) || null
+    domainCache.set(domainName.toLowerCase(), { domain, timestamp: now })
+    return domain
+  } catch {
+    domainCache.set(domainName.toLowerCase(), { domain: null, timestamp: now })
+    return null
+  }
+}
+
+/**
+ * Find a specific record in a parent domain
+ */
+async function findRecordInDomain(
+  parentDomainId: string,
+  recordName: string
+): Promise<DnspodRecordItem | null> {
+  const recordResult = await dnspodRequest('Record.List', { domain_id: parentDomainId })
+  const records = recordResult.records || []
+  return records.find((r: any) => r.name === recordName) || null
+}
+
+/**
+ * Build the full record name for DNSPod
+ * e.g., subDomain = "mysite", recordName = "www" -> "www.mysite"
+ * e.g., subDomain = "mysite", recordName = "@" -> "mysite"
+ */
+function buildRecordName(subDomain: string, recordName: string): string {
+  if (recordName === '@' || recordName === '') {
+    return subDomain
+  }
+  return `${recordName}.${subDomain}`
 }
 
 // ==================== Domain Operations ====================
 
 export async function createDomain(domainName: string): Promise<string | null> {
   try {
-    const result = await dnspodRequest('Domain.Create', { domain: domainName })
-    return result.domain?.id || null
+    const domainInfo = extractParentAndSubDomain(domainName)
+
+    if (domainInfo) {
+      // This is a subdomain - just record locally, DNS records created later
+      return domainName
+    } else {
+      // Root domain - create in DNSPod
+      const result = await dnspodRequest('Domain.Create', { domain: domainName })
+      // Clear cache since we added a new domain
+      domainCache.clear()
+      return result.domain?.id || null
+    }
   } catch (error: any) {
     console.error('Failed to create domain in DNSPod:', error.message)
     return null
   }
 }
 
-export async function deleteDomain(domainName: string): Promise<boolean> {
+export async function deleteDomain(fullDomain: string): Promise<boolean> {
   try {
-    const domain = await findDomainInDnspod(domainName)
-    if (!domain) {
-      console.error('Domain not found in DNSPod:', domainName)
+    const domainInfo = extractParentAndSubDomain(fullDomain)
+
+    if (!domainInfo) {
+      // Root domain - delete entire domain
+      const domain = await findDomainInDnspod(fullDomain)
+      if (!domain) {
+        console.error('Domain not found in DNSPod:', fullDomain)
+        return false
+      }
+      await dnspodRequest('Domain.Remove', { domain_id: domain.id })
+      domainCache.clear()
+      return true
+    }
+
+    // Subdomain - find and delete the specific record
+    const parentDomain = await findDomainInDnspod(domainInfo.parentDomain)
+    if (!parentDomain) {
+      console.error('Parent domain not found in DNSPod:', domainInfo.parentDomain)
       return false
     }
 
-    await dnspodRequest('Domain.Remove', { domain_id: domain.id })
+    const recordName = buildRecordName(domainInfo.subDomain, domainInfo.subDomain)
+    const targetRecord = await findRecordInDomain(parentDomain.id, recordName)
+    if (!targetRecord) {
+      console.error('Subdomain record not found in DNSPod:', recordName)
+      return false
+    }
+
+    await dnspodRequest('Record.Remove', {
+      domain_id: parentDomain.id,
+      record_id: targetRecord.id
+    })
     return true
   } catch (error: any) {
     console.error('Failed to delete domain from DNSPod:', error.message)
@@ -167,20 +253,38 @@ export async function deleteDomain(domainName: string): Promise<boolean> {
 
 export async function pauseDomain(fullDomain: string): Promise<boolean> {
   try {
-    // Extract parent domain from full domain (e.g., "sub.example.com" -> "example.com")
     const domainInfo = extractParentAndSubDomain(fullDomain)
+
     if (!domainInfo) {
-      console.error('Could not determine parent domain for:', fullDomain)
-      return false
+      // Root domain - pause entire domain
+      const domain = await findDomainInDnspod(fullDomain)
+      if (!domain) {
+        console.error('Domain not found in DNSPod:', fullDomain)
+        return false
+      }
+      await dnspodRequest('Domain.Pause', { domain_id: domain.id })
+      return true
     }
 
-    const domain = await findDomainInDnspod(domainInfo.parentDomain)
-    if (!domain) {
+    // Subdomain - disable the specific record
+    const parentDomain = await findDomainInDnspod(domainInfo.parentDomain)
+    if (!parentDomain) {
       console.error('Parent domain not found in DNSPod:', domainInfo.parentDomain)
       return false
     }
 
-    await dnspodRequest('Domain.Pause', { domain_id: domain.id })
+    const recordName = buildRecordName(domainInfo.subDomain, domainInfo.subDomain)
+    const targetRecord = await findRecordInDomain(parentDomain.id, recordName)
+    if (!targetRecord) {
+      console.error('Subdomain record not found in DNSPod:', recordName)
+      return false
+    }
+
+    await dnspodRequest('Record.Status', {
+      domain_id: parentDomain.id,
+      record_id: targetRecord.id,
+      status: 'disable'
+    })
     return true
   } catch (error: any) {
     console.error('Failed to pause domain in DNSPod:', error.message)
@@ -190,20 +294,38 @@ export async function pauseDomain(fullDomain: string): Promise<boolean> {
 
 export async function resumeDomain(fullDomain: string): Promise<boolean> {
   try {
-    // Extract parent domain from full domain (e.g., "sub.example.com" -> "example.com")
     const domainInfo = extractParentAndSubDomain(fullDomain)
+
     if (!domainInfo) {
-      console.error('Could not determine parent domain for:', fullDomain)
-      return false
+      // Root domain - resume entire domain
+      const domain = await findDomainInDnspod(fullDomain)
+      if (!domain) {
+        console.error('Domain not found in DNSPod:', fullDomain)
+        return false
+      }
+      await dnspodRequest('Domain.Start', { domain_id: domain.id })
+      return true
     }
 
-    const domain = await findDomainInDnspod(domainInfo.parentDomain)
-    if (!domain) {
+    // Subdomain - enable the specific record
+    const parentDomain = await findDomainInDnspod(domainInfo.parentDomain)
+    if (!parentDomain) {
       console.error('Parent domain not found in DNSPod:', domainInfo.parentDomain)
       return false
     }
 
-    await dnspodRequest('Domain.Start', { domain_id: domain.id })
+    const recordName = buildRecordName(domainInfo.subDomain, domainInfo.subDomain)
+    const targetRecord = await findRecordInDomain(parentDomain.id, recordName)
+    if (!targetRecord) {
+      console.error('Subdomain record not found in DNSPod:', recordName)
+      return false
+    }
+
+    await dnspodRequest('Record.Status', {
+      domain_id: parentDomain.id,
+      record_id: targetRecord.id,
+      status: 'enable'
+    })
     return true
   } catch (error: any) {
     console.error('Failed to resume domain in DNSPod:', error.message)
@@ -218,7 +340,6 @@ export async function createRecord(
   record: { name: string; type: string; value: string; priority: number; ttl: number }
 ): Promise<string | null> {
   try {
-    // Extract parent domain and subdomain
     const domainInfo = extractParentAndSubDomain(fullDomain)
     if (!domainInfo) {
       console.error('Could not determine parent domain for:', fullDomain)
@@ -226,16 +347,13 @@ export async function createRecord(
     }
 
     const { parentDomain, subDomain } = domainInfo
-
-    // Find the parent domain in DNSPod
     const domain = await findDomainInDnspod(parentDomain)
     if (!domain) {
       console.error('Parent domain not found in DNSPod:', parentDomain)
       return null
     }
 
-    // The record name should be combined with subDomain
-    const recordName = subDomain === '@' ? record.name : `${subDomain}.${record.name}`
+    const recordName = buildRecordName(subDomain, record.name)
 
     const result = await dnspodRequest('Record.Create', {
       domain_id: domain.id,
@@ -259,21 +377,18 @@ export async function updateRecord(
   record: { name: string; type: string; value: string; priority: number; ttl: number }
 ): Promise<boolean> {
   try {
-    // Extract parent domain and subdomain
     const domainInfo = extractParentAndSubDomain(fullDomain)
     if (!domainInfo) {
       return false
     }
 
     const { parentDomain, subDomain } = domainInfo
-
-    // Find the parent domain in DNSPod
     const domain = await findDomainInDnspod(parentDomain)
     if (!domain) {
       return false
     }
 
-    const recordName = subDomain === '@' ? record.name : `${subDomain}.${record.name}`
+    const recordName = buildRecordName(subDomain, record.name)
 
     await dnspodRequest('Record.Modify', {
       domain_id: domain.id,
@@ -293,15 +408,12 @@ export async function updateRecord(
 
 export async function deleteRecord(fullDomain: string, recordId: string): Promise<boolean> {
   try {
-    // Extract parent domain and subdomain
     const domainInfo = extractParentAndSubDomain(fullDomain)
     if (!domainInfo) {
       return false
     }
 
     const { parentDomain } = domainInfo
-
-    // Find the parent domain in DNSPod
     const domain = await findDomainInDnspod(parentDomain)
     if (!domain) {
       return false
@@ -322,7 +434,6 @@ export async function deleteRecord(fullDomain: string, recordId: string): Promis
 
 export async function syncRecordsFromDnspod(fullDomain: string, domainId: number): Promise<DnspodRecord[]> {
   try {
-    // Extract parent domain from full domain (e.g., "sub.example.com" -> "example.com")
     const domainInfo = extractParentAndSubDomain(fullDomain)
     if (!domainInfo) {
       console.error('Could not determine parent domain for:', fullDomain)
@@ -335,24 +446,40 @@ export async function syncRecordsFromDnspod(fullDomain: string, domainId: number
       return []
     }
 
-    // Get records for this domain
     const recordResult = await dnspodRequest('Record.List', { domain_id: domain.id })
     const records = recordResult.records || []
+
+    // Build the prefix we expect for this subdomain
+    // e.g., if subDomain = "mysite", we look for records starting with "mysite." or equals "mysite"
+    const subdomainPrefix = domainInfo.subDomain + '.'
+
+    // Filter records that belong to this subdomain
+    const matchingRecords = records.filter(r =>
+      r.name === domainInfo.subDomain || r.name.startsWith(subdomainPrefix)
+    )
 
     // Get existing record IDs in local database
     const existingRecords = db.prepare('SELECT record_id FROM dns_records WHERE domain_id = ?').all(domainId) as { record_id: string }[]
     const existingIds = new Set(existingRecords.map(r => r.record_id))
 
     // Insert new records that don't exist locally
-    for (const record of records) {
+    for (const record of matchingRecords) {
       if (!existingIds.has(record.id)) {
+        // Extract the relative record name (remove subdomain prefix)
+        let relativeName = record.name
+        if (record.name.startsWith(subdomainPrefix)) {
+          relativeName = record.name.slice(subdomainPrefix.length)
+        } else if (record.name === domainInfo.subDomain) {
+          relativeName = '@'
+        }
+
         db.prepare(`
           INSERT INTO dns_records (domain_id, record_id, name, type, value, priority, ttl, enabled)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           domainId,
           record.id,
-          record.name,
+          relativeName,
           record.type,
           record.value,
           parseInt(record.priority) || 10,
@@ -362,15 +489,24 @@ export async function syncRecordsFromDnspod(fullDomain: string, domainId: number
       }
     }
 
-    return records.map(r => ({
-      id: r.id,
-      name: r.name,
-      type: r.type,
-      value: r.value,
-      priority: parseInt(r.priority) || 10,
-      ttl: parseInt(r.ttl) || 600,
-      enabled: r.enabled === '1'
-    }))
+    return matchingRecords.map(r => {
+      let relativeName = r.name
+      if (r.name.startsWith(subdomainPrefix)) {
+        relativeName = r.name.slice(subdomainPrefix.length)
+      } else if (r.name === domainInfo.subDomain) {
+        relativeName = '@'
+      }
+
+      return {
+        id: r.id,
+        name: relativeName,
+        type: r.type,
+        value: r.value,
+        priority: parseInt(r.priority) || 10,
+        ttl: parseInt(r.ttl) || 600,
+        enabled: r.enabled === '1'
+      }
+    })
   } catch (error: any) {
     console.error('Failed to sync records from DNSPod:', error.message)
     return []

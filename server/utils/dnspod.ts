@@ -4,8 +4,6 @@ import db from '../db'
 
 const DNSPOD_API_BASE = 'https://dnspod.tencentcloudapi.com'
 const DNSPOD_API_VERSION = '2021-03-23'
-const DNSPOD_SERVICE = 'dnspod'
-const DNSPOD_REGION = ''
 
 interface DnspodRecord {
   id: string
@@ -36,16 +34,12 @@ function getCredentials(): DnspodCredentials | null {
   return { secretId, secretKey }
 }
 
-// TC3-HMAC-SHA256 signature algorithm for Tencent Cloud API v3
-function tc3HmacSha256(secretKey: string, msg: string): Buffer {
-  return crypto.createHmac('sha256', secretKey).update(msg, 'utf8').digest()
+// Simple HMAC-SHA256 signature for DNSPod API
+function hmacSha256(secretKey: string, msg: string): string {
+  return crypto.createHmac('sha256', secretKey).update(msg, 'utf8').digest('hex')
 }
 
-function sha256Hex(msg: string): string {
-  return crypto.createHash('sha256').update(msg, 'utf8').digest('hex')
-}
-
-// Tencent Cloud API v3 signature
+// Tencent Cloud API v3 signature (simplified for DNSPod)
 async function dnspodRequest(action: string, payload: Record<string, any>) {
   const credentials = getCredentials()
   if (!credentials) {
@@ -54,100 +48,50 @@ async function dnspodRequest(action: string, payload: Record<string, any>) {
 
   const { secretId, secretKey } = credentials
   const timestamp = Math.floor(Date.now() / 1000)
-  const nonce = Math.floor(Math.random() * 1000000)
+  const nonce = String(Math.floor(Math.random() * 1000000))
 
-  // Convert timestamp to YYYYMMDD format for credential scope
-  const dateObj = new Date(timestamp * 1000)
-  const dateStr = dateObj.toISOString().slice(0, 10).replace(/-/g, '')
-
-  // Build the request body
-  const body: Record<string, string> = {
+  // Build the request body (sorted alphabetically by key)
+  const bodyMap: Record<string, string> = {
     Action: action,
     Version: DNSPOD_API_VERSION,
     Timestamp: String(timestamp),
-    Nonce: String(nonce),
+    Nonce: nonce,
     SecretId: secretId
   }
 
   // Add payload parameters
   for (const [key, value] of Object.entries(payload)) {
-    body[key] = String(value)
+    bodyMap[key] = String(value)
   }
 
   // Sort keys alphabetically
-  const sortedKeys = Object.keys(body).sort()
+  const sortedKeys = Object.keys(bodyMap).sort()
 
-  // Build canonical query string (empty for form-urlencoded POST)
-  const canonicalQueryString = ''
+  // Build canonical string: sorted key=value pairs joined by &
+  // For signature, use the values directly without URL encoding
+  const canonicalStr = sortedKeys.map(key => `${key}=${bodyMap[key]}`).join('&')
 
-  // Build form-urlencoded body for request
-  const encodedParts: string[] = []
+  // Calculate signature using HMAC-SHA256
+  const signature = hmacSha256(secretKey, canonicalStr)
+
+  // Build form-urlencoded body with signature
+  const bodyParts: string[] = []
   for (const key of sortedKeys) {
-    const encodedKey = encodeURIComponent(key)
-    const encodedValue = encodeURIComponent(body[key])
-    encodedParts.push(`${encodedKey}=${encodedValue}`)
+    bodyParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(bodyMap[key])}`)
   }
-  const requestBody = encodedParts.join('&')
+  // Add signature
+  bodyParts.push(`${encodeURIComponent('Signature')}=${encodeURIComponent(signature)}`)
 
-  // Build canonical headers (must include content-type and host)
-  const contentType = 'application/x-www-form-urlencoded'
-  const canonicalHeaders = `content-type:${contentType}\nhost:dnspod.tencentcloudapi.com\n`
-
-  // Signed headers
-  const signedHeaders = 'content-type;host'
-
-  // Hash of request body
-  const hashedRequestBody = sha256Hex(requestBody)
-
-  // Build canonical request
-  const canonicalRequest = [
-    'POST',                    // HTTP method
-    '/',                       // Canonical URI
-    canonicalQueryString,      // Canonical query string
-    canonicalHeaders,          // Canonical headers
-    signedHeaders,             // Signed headers
-    hashedRequestBody          // Hashed request body
-  ].join('\n')
-
-  // Build string to sign
-  const algorithm = 'TC3-HMAC-SHA256'
-  const credentialScope = `${dateStr}/${DNSPOD_SERVICE}/tc3_request`
-  const hashedCanonicalRequest = sha256Hex(canonicalRequest)
-
-  const stringToSign = [
-    algorithm,
-    String(timestamp),
-    credentialScope,
-    hashedCanonicalRequest
-  ].join('\n')
-
-  // Calculate signature using TC3-HMAC-SHA256
-  const secretDate = tc3HmacSha256(secretKey, dateStr)
-  const secretService = tc3HmacSha256(secretDate, DNSPOD_SERVICE)
-  const secretSigning = tc3HmacSha256(secretService, 'tc3_request')
-  const signature = crypto.createHmac('sha256', secretSigning).update(stringToSign).digest('hex')
-
-  // Add signature to body
-  body.Signature = signature
-
-  // Rebuild request body with signature (signature was added after initial body build)
-  const finalEncodedParts: string[] = []
-  const finalSortedKeys = Object.keys(body).sort()
-  for (const key of finalSortedKeys) {
-    const encodedKey = encodeURIComponent(key)
-    const encodedValue = encodeURIComponent(body[key])
-    finalEncodedParts.push(`${encodedKey}=${encodedValue}`)
-  }
-  const finalRequestBody = finalEncodedParts.join('&')
+  const requestBody = bodyParts.join('&')
 
   console.log('DNSPod Request URL:', DNSPOD_API_BASE)
-  console.log('DNSPod Request Body:', finalRequestBody)
+  console.log('DNSPod Request Body:', requestBody)
+  console.log('DNSPod Canonical String:', canonicalStr)
 
   try {
-    // Send the form body string directly
-    const response = await axios.post(DNSPOD_API_BASE, finalRequestBody, {
+    const response = await axios.post(DNSPOD_API_BASE, requestBody, {
       headers: {
-        'Content-Type': contentType
+        'Content-Type': 'application/x-www-form-urlencoded'
       }
     })
 

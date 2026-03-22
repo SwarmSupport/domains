@@ -12,6 +12,8 @@ const { t, locale } = useI18n()
 
 const sidebarCollapsed = ref(false)
 
+const sidebarWidth = computed(() => sidebarCollapsed.value ? '64px' : '240px')
+
 const navItems = computed(() => {
   const items = [
     { path: '/dashboard', label: t('nav.dashboard'), icon: 'dashboard' },
@@ -96,7 +98,7 @@ function toggleLocale() {
       </div>
     </aside>
 
-    <div class="main-wrapper">
+    <div class="main-wrapper" :style="{ marginLeft: sidebarWidth }">
       <header class="header">
         <div class="header-left">
           <h2 class="page-title">{{ route.meta.title || t('nav.dashboard') }}</h2>
@@ -266,10 +268,6 @@ function toggleLocale() {
   flex-direction: column;
   min-height: 100vh;
   transition: margin-left var(--transition-normal);
-}
-
-.sidebar.collapsed + .main-wrapper {
-  margin-left: var(--sidebar-collapsed);
 }
 
 .header {

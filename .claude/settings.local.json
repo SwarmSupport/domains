@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npm run build)"
+      "Bash(npm run build)",
+      "WebSearch",
+      "WebFetch(domain:www.tencentcloud.com)",
+      "WebFetch(domain:docs.dnspod.com)",
+      "WebFetch(domain:cloud.tencent.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.dnspod.com)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:resend.com)"
     ],
     "deny": [],
     "ask": []

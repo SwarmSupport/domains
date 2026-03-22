@@ -4,6 +4,8 @@ import db from '../db'
 
 const DNSPOD_API_BASE = 'https://dnspod.tencentcloudapi.com'
 const DNSPOD_API_VERSION = '2021-03-23'
+const DNSPOD_SERVICE = 'dnspod'
+const DNSPOD_REGION = ''
 
 interface DnspodRecord {
   id: string
@@ -34,13 +36,17 @@ function getCredentials(): DnspodCredentials | null {
   return { secretId, secretKey }
 }
 
-function sha256Encrypt(secretKey: string, signStr: string): string {
-  const hmac = crypto.createHmac('sha256', secretKey)
-  hmac.update(signStr)
-  return hmac.digest('hex')
+// TC3-HMAC-SHA256 signature algorithm for Tencent Cloud API v3
+function tc3HmacSha256(secretKey: string, msg: string): Buffer {
+  return crypto.createHmac('sha256', secretKey).update(msg, 'utf8').digest()
 }
 
-async function dnspodRequest(action: string, data: Record<string, string | number>) {
+function sha256Hex(msg: string): string {
+  return crypto.createHash('sha256').update(msg, 'utf8').digest('hex')
+}
+
+// Tencent Cloud API v3 signature
+async function dnspodRequest(action: string, payload: Record<string, any>) {
   const credentials = getCredentials()
   if (!credentials) {
     throw new Error('DNSPod credentials not configured')
@@ -50,33 +56,102 @@ async function dnspodRequest(action: string, data: Record<string, string | numbe
   const timestamp = Math.floor(Date.now() / 1000)
   const nonce = Math.floor(Math.random() * 1000000)
 
-  // Build the string to sign for Signature
-  const signedParams = {
+  // Convert timestamp to YYYYMMDD format for credential scope
+  const dateObj = new Date(timestamp * 1000)
+  const dateStr = dateObj.toISOString().slice(0, 10).replace(/-/g, '')
+
+  // Build the request body
+  const body: Record<string, string> = {
     Action: action,
     Version: DNSPOD_API_VERSION,
-    Timestamp: timestamp,
-    Nonce: nonce,
-    SecretId: secretId,
-    ...data
+    Timestamp: String(timestamp),
+    Nonce: String(nonce),
+    SecretId: secretId
   }
 
-  // Sort parameters alphabetically
-  const sortedKeys = Object.keys(signedParams).sort()
-  const signStr = sortedKeys.map(key => `${key}=${signedParams[key]}`).join('&')
+  // Add payload parameters
+  for (const [key, value] of Object.entries(payload)) {
+    body[key] = String(value)
+  }
 
-  // Calculate signature
-  const signature = sha256Encrypt(secretKey, signStr)
+  // Sort keys alphabetically
+  const sortedKeys = Object.keys(body).sort()
+
+  // Build canonical query string (empty for form-urlencoded POST)
+  const canonicalQueryString = ''
+
+  // Build form-urlencoded body for request
+  const encodedParts: string[] = []
+  for (const key of sortedKeys) {
+    const encodedKey = encodeURIComponent(key)
+    const encodedValue = encodeURIComponent(body[key])
+    encodedParts.push(`${encodedKey}=${encodedValue}`)
+  }
+  const requestBody = encodedParts.join('&')
+
+  // Build canonical headers (must include content-type and host)
+  const contentType = 'application/x-www-form-urlencoded'
+  const canonicalHeaders = `content-type:${contentType}\nhost:dnspod.tencentcloudapi.com\n`
+
+  // Signed headers
+  const signedHeaders = 'content-type;host'
+
+  // Hash of request body
+  const hashedRequestBody = sha256Hex(requestBody)
+
+  // Build canonical request
+  const canonicalRequest = [
+    'POST',                    // HTTP method
+    '/',                       // Canonical URI
+    canonicalQueryString,      // Canonical query string
+    canonicalHeaders,          // Canonical headers
+    signedHeaders,             // Signed headers
+    hashedRequestBody          // Hashed request body
+  ].join('\n')
+
+  // Build string to sign
+  const algorithm = 'TC3-HMAC-SHA256'
+  const credentialScope = `${dateStr}/${DNSPOD_SERVICE}/tc3_request`
+  const hashedCanonicalRequest = sha256Hex(canonicalRequest)
+
+  const stringToSign = [
+    algorithm,
+    String(timestamp),
+    credentialScope,
+    hashedCanonicalRequest
+  ].join('\n')
+
+  // Calculate signature using TC3-HMAC-SHA256
+  const secretDate = tc3HmacSha256(secretKey, dateStr)
+  const secretService = tc3HmacSha256(secretDate, DNSPOD_SERVICE)
+  const secretSigning = tc3HmacSha256(secretService, 'tc3_request')
+  const signature = crypto.createHmac('sha256', secretSigning).update(stringToSign).digest('hex')
+
+  // Add signature to body
+  body.Signature = signature
+
+  // Rebuild request body with signature (signature was added after initial body build)
+  const finalEncodedParts: string[] = []
+  const finalSortedKeys = Object.keys(body).sort()
+  for (const key of finalSortedKeys) {
+    const encodedKey = encodeURIComponent(key)
+    const encodedValue = encodeURIComponent(body[key])
+    finalEncodedParts.push(`${encodedKey}=${encodedValue}`)
+  }
+  const finalRequestBody = finalEncodedParts.join('&')
+
+  console.log('DNSPod Request URL:', DNSPOD_API_BASE)
+  console.log('DNSPod Request Body:', finalRequestBody)
 
   try {
-    const response = await axios.post(DNSPOD_API_BASE, {
-      Action: action,
-      Version: DNSPOD_API_VERSION,
-      Timestamp: timestamp,
-      Nonce: nonce,
-      SecretId: secretId,
-      Signature: signature,
-      ...data
+    // Send the form body string directly
+    const response = await axios.post(DNSPOD_API_BASE, finalRequestBody, {
+      headers: {
+        'Content-Type': contentType
+      }
     })
+
+    console.log('DNSPod Response:', JSON.stringify(response.data).substring(0, 500))
 
     if (response.data.Response?.Error) {
       throw new Error(response.data.Response.Error.Message || 'DNSPod API error')
@@ -84,8 +159,13 @@ async function dnspodRequest(action: string, data: Record<string, string | numbe
 
     return response.data.Response || response.data
   } catch (error: any) {
+    console.error('DNSPod API Error:', error.message)
     if (error.response?.data) {
-      throw new Error(error.response.data.status?.message || 'DNSPod API error')
+      throw new Error(
+        error.response.data.Response?.Error?.Message ||
+        error.response.data.status?.message ||
+        'DNSPod API error'
+      )
     }
     throw error
   }
@@ -94,7 +174,7 @@ async function dnspodRequest(action: string, data: Record<string, string | numbe
 export async function createDomain(domainName: string): Promise<string | null> {
   try {
     const result = await dnspodRequest('CreateDomain', {
-      DomainName: domainName
+      Domain: domainName
     })
     return result.Domain?.DomainId?.toString() || null
   } catch (error: any) {
@@ -106,7 +186,7 @@ export async function createDomain(domainName: string): Promise<string | null> {
 export async function deleteDomain(domainName: string): Promise<boolean> {
   try {
     await dnspodRequest('DeleteDomain', {
-      DomainName: domainName
+      Domain: domainName
     })
     return true
   } catch (error: any) {
@@ -118,7 +198,7 @@ export async function deleteDomain(domainName: string): Promise<boolean> {
 export async function pauseDomain(domainName: string): Promise<boolean> {
   try {
     await dnspodRequest('PauseDomain', {
-      DomainName: domainName
+      Domain: domainName
     })
     return true
   } catch (error: any) {
@@ -130,7 +210,7 @@ export async function pauseDomain(domainName: string): Promise<boolean> {
 export async function resumeDomain(domainName: string): Promise<boolean> {
   try {
     await dnspodRequest('StartDomain', {
-      DomainName: domainName
+      Domain: domainName
     })
     return true
   } catch (error: any) {
@@ -145,7 +225,7 @@ export async function createRecord(
 ): Promise<string | null> {
   try {
     const result = await dnspodRequest('CreateRecord', {
-      DomainName: domainName,
+      Domain: domainName,
       SubDomain: record.name,
       RecordType: record.type,
       Value: record.value,
@@ -166,7 +246,7 @@ export async function updateRecord(
 ): Promise<boolean> {
   try {
     await dnspodRequest('ModifyRecord', {
-      DomainName: domainName,
+      Domain: domainName,
       RecordId: parseInt(recordId),
       SubDomain: record.name,
       RecordType: record.type,
@@ -184,7 +264,7 @@ export async function updateRecord(
 export async function deleteRecord(domainName: string, recordId: string): Promise<boolean> {
   try {
     await dnspodRequest('DeleteRecord', {
-      DomainName: domainName,
+      Domain: domainName,
       RecordId: parseInt(recordId)
     })
     return true
@@ -197,7 +277,7 @@ export async function deleteRecord(domainName: string, recordId: string): Promis
 export async function syncRecordsFromDnspod(domainName: string, domainId: number): Promise<DnspodRecord[]> {
   try {
     const result = await dnspodRequest('DescribeRecordList', {
-      DomainName: domainName
+      Domain: domainName
     })
 
     const records = result.Records || []

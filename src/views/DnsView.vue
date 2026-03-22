@@ -18,6 +18,10 @@ const domainName = computed(() => route.params.domain as string)
 const showAddModal = ref(false)
 const showEditModal = ref(false)
 const editingRecord = ref<DnsRecord | null>(null)
+const addError = ref('')
+const editError = ref('')
+const addLoading = ref(false)
+const editLoading = ref(false)
 
 const form = ref({
   name: '',
@@ -56,21 +60,43 @@ function openEditModal(record: DnsRecord) {
 }
 
 async function handleAddRecord() {
-  if (!form.value.name || !form.value.value) return
-  const success = await domainStore.createRecord(domainName.value, form.value)
-  if (success) {
-    showAddModal.value = false
-    resetForm()
+  addError.value = ''
+  if (!form.value.name || !form.value.value) {
+    addError.value = 'Please fill in all required fields'
+    return
+  }
+  addLoading.value = true
+  try {
+    const success = await domainStore.createRecord(domainName.value, form.value)
+    if (success) {
+      showAddModal.value = false
+      resetForm()
+    }
+  } catch (error: any) {
+    addError.value = error?.response?.data?.error || error.message || 'Failed to add record'
+  } finally {
+    addLoading.value = false
   }
 }
 
 async function handleUpdateRecord() {
-  if (!editingRecord.value || !form.value.name || !form.value.value) return
-  const success = await domainStore.updateRecord(domainName.value, editingRecord.value.id, form.value)
-  if (success) {
-    showEditModal.value = false
-    editingRecord.value = null
-    resetForm()
+  editError.value = ''
+  if (!editingRecord.value || !form.value.name || !form.value.value) {
+    editError.value = 'Please fill in all required fields'
+    return
+  }
+  editLoading.value = true
+  try {
+    const success = await domainStore.updateRecord(domainName.value, editingRecord.value.id, form.value)
+    if (success) {
+      showEditModal.value = false
+      editingRecord.value = null
+      resetForm()
+    }
+  } catch (error: any) {
+    editError.value = error?.response?.data?.error || error.message || 'Failed to update record'
+  } finally {
+    editLoading.value = false
   }
 }
 
@@ -162,9 +188,10 @@ async function handleDeleteRecord(id: number) {
           <InputField v-model.number="form.priority" type="number" :label="t('dns.recordPriority')" :placeholder="t('dns.recordPriorityPlaceholder')"/>
           <InputField v-model.number="form.ttl" type="number" :label="t('dns.recordTTL')" :placeholder="t('dns.recordTTLPlaceholder')"/>
         </div>
+        <p v-if="addError" class="error">{{ addError }}</p>
         <div class="form-actions">
           <Button variant="secondary" type="button" @click="showAddModal = false; resetForm()">{{ t('common.cancel') }}</Button>
-          <Button type="submit">{{ t('common.add') }}</Button>
+          <Button type="submit" :loading="addLoading">{{ t('common.add') }}</Button>
         </div>
       </form>
     </Modal>
@@ -185,9 +212,10 @@ async function handleDeleteRecord(id: number) {
           <InputField v-model.number="form.priority" type="number" :label="t('dns.recordPriority')" :placeholder="t('dns.recordPriorityPlaceholder')"/>
           <InputField v-model.number="form.ttl" type="number" :label="t('dns.recordTTL')" :placeholder="t('dns.recordTTLPlaceholder')"/>
         </div>
+        <p v-if="editError" class="error">{{ editError }}</p>
         <div class="form-actions">
           <Button variant="secondary" type="button" @click="showEditModal = false; resetForm()">{{ t('common.cancel') }}</Button>
-          <Button type="submit">{{ t('common.save') }}</Button>
+          <Button type="submit" :loading="editLoading">{{ t('common.save') }}</Button>
         </div>
       </form>
     </Modal>
@@ -370,5 +398,11 @@ async function handleDeleteRecord(id: number) {
   justify-content: flex-end;
   gap: 12px;
   margin-top: 8px;
+}
+
+.error {
+  color: var(--color-danger);
+  font-size: 14px;
+  margin: 8px 0;
 }
 </style>

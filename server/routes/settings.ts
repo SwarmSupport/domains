@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import jwt from 'jsonwebtoken'
+import axios from 'axios'
 import db from '../db'
 import { authMiddleware, adminMiddleware, AuthRequest } from '../middleware/auth'
 
@@ -58,6 +59,71 @@ router.post('/', authMiddleware, adminMiddleware, (req, res) => {
   }
 
   res.json({ success: true })
+})
+
+// Test DNSPod API connection
+router.post('/test-dnspod', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
+  const token = db.prepare('SELECT value FROM settings WHERE key = ?').get('DNSPOD_TOKEN') as { value: string } | undefined
+
+  if (!token?.value) {
+    return res.json({ success: false, message: 'DNSPod token not configured' })
+  }
+
+  try {
+    const response = await axios.post(
+      'https://api.dnspod.com/Domain.List',
+      new URLSearchParams({ login_token: token.value, format: 'json' }).toString(),
+      { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }
+    )
+
+    if (response.data.status?.code === 'error') {
+      return res.json({ success: false, message: response.data.status?.message || 'API error' })
+    }
+
+    return res.json({ success: true, message: 'Connection successful' })
+  } catch (error: any) {
+    return res.json({ success: false, message: error.response?.data?.status?.message || error.message })
+  }
+})
+
+// Test Turnstile verification
+router.post('/test-turnstile', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
+  const secretKey = db.prepare('SELECT value FROM settings WHERE key = ?').get('TURNSTILE_SECRET_KEY') as { value: string } | undefined
+
+  if (!secretKey?.value) {
+    return res.json({ success: false, message: 'Turnstile secret key not configured' })
+  }
+
+  // Just return success since we can't test without a token
+  return res.json({ success: true, message: 'Turnstile secret key configured' })
+})
+
+// Test Resend email API
+router.post('/test-resend', authMiddleware, adminMiddleware, async (req: AuthRequest, res) => {
+  const apiKey = db.prepare('SELECT value FROM settings WHERE key = ?').get('RESEND_API_KEY') as { value: string } | undefined
+  const domain = db.prepare('SELECT value FROM settings WHERE key = ?').get('RESEND_DOMAIN') as { value: string } | undefined
+
+  if (!apiKey?.value) {
+    return res.json({ success: false, message: 'Resend API key not configured' })
+  }
+
+  if (!domain?.value) {
+    return res.json({ success: false, message: 'Resend domain not configured' })
+  }
+
+  try {
+    const { Resend } = await import('resend')
+    const resend = new Resend(apiKey.value)
+    const { error } = await resend.domains.list()
+
+    if (error) {
+      return res.json({ success: false, message: error.message })
+    }
+
+    return res.json({ success: true, message: 'Connection successful' })
+  } catch (error: any) {
+    return res.json({ success: false, message: error.message })
+  }
 })
 
 export default router

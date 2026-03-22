@@ -144,9 +144,9 @@ export const useDomainStore = defineStore('domains', () => {
         records.value.push(data.data)
         return true
       }
-      return false
-    } catch {
-      return false
+      throw new Error(data.error || 'Failed to create record')
+    } catch (error: any) {
+      throw error
     }
   }
 

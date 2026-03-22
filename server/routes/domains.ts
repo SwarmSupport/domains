@@ -4,6 +4,9 @@ import { authMiddleware, adminMiddleware, AuthRequest } from '../middleware/auth
 import { createDomain, pauseDomain, resumeDomain, deleteDomain as deleteDomainFromDnspod } from '../utils/dnspod'
 import { sendDomainApprovedEmail, sendDomainRejectedEmail } from '../utils/email'
 
+// DNSPod API base URL
+const DNSPOD_API_BASE = 'https://api.dnspod.com'
+
 const router = Router()
 
 function getSetting(key: string): string | null {
@@ -88,15 +91,18 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
     return res.status(400).json({ success: false, error: 'Domain already exists' })
   }
 
-  let dnspodDomainId: string | null = null
+  // Regular users need to provide purpose and are pending approval
+  // Admins can create domains directly without purpose
+  if (!isAdmin && !purpose) {
+    return res.status(400).json({ success: false, error: 'Please enter the purpose of this domain' })
+  }
+
+  let dnspodDomainId = null
   let status = 'pending'
 
-  // Admin creates domain directly as active and creates in DNSPod
+  // Admin auto-approves: create domain in DNSPod immediately
   if (isAdmin) {
     dnspodDomainId = await createDomain(name)
-    if (!dnspodDomainId) {
-      return res.status(500).json({ success: false, error: 'Failed to create domain in DNSPod' })
-    }
     status = 'active'
   }
 

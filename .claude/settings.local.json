@@ -9,7 +9,15 @@
       "WebFetch(domain:github.com)",
       "WebFetch(domain:www.dnspod.com)",
       "WebFetch(domain:developers.cloudflare.com)",
-      "WebFetch(domain:resend.com)"
+      "WebFetch(domain:resend.com)",
+      "WebFetch(domain:intl.dnspod.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:support.dnspod.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:gist.github.com)",
+      "WebFetch(domain:api.dnspod.com)",
+      "WebFetch(domain:console.dnspod.com)"
     ],
     "deny": [],
     "ask": []

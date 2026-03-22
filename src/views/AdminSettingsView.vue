@@ -10,12 +10,13 @@ import Toggle from '@/components/Toggle.vue'
 const { t } = useI18n()
 
 // DNS & Domain settings
-const dnspodSecretId = ref('')
-const dnspodSecretKey = ref('')
+const dnspodToken = ref('')
 const domainSuffixes = ref('')
 const dnsLoading = ref(false)
 const dnsSaved = ref(false)
 const dnsError = ref('')
+const dnsTestLoading = ref(false)
+const dnsTestResult = ref<{ success: boolean; message: string } | null>(null)
 
 // Turnstile settings
 const turnstileEnabled = ref(false)
@@ -24,6 +25,8 @@ const turnstileSecretKey = ref('')
 const turnstileLoading = ref(false)
 const turnstileSaved = ref(false)
 const turnstileError = ref('')
+const turnstileTestLoading = ref(false)
+const turnstileTestResult = ref<{ success: boolean; message: string } | null>(null)
 
 // Email settings
 const emailEnabled = ref(false)
@@ -33,6 +36,8 @@ const fromEmail = ref('')
 const emailLoading = ref(false)
 const emailSaved = ref(false)
 const emailError = ref('')
+const emailTestLoading = ref(false)
+const emailTestResult = ref<{ success: boolean; message: string } | null>(null)
 
 // Initial loading state
 const initialLoading = ref(true)
@@ -40,8 +45,7 @@ const initialLoading = ref(true)
 onMounted(async () => {
   try {
     const [
-      { data: secretId },
-      { data: secretKey },
+      { data: token },
       { data: suffixes },
       { data: turnstileEn },
       { data: turnstileSite },
@@ -51,8 +55,7 @@ onMounted(async () => {
       { data: resendDom },
       { data: from }
     ] = await Promise.all([
-      settingApi.get('DNSPOD_SECRET_ID'),
-      settingApi.get('DNSPOD_SECRET_KEY'),
+      settingApi.get('DNSPOD_TOKEN'),
       settingApi.get('DOMAIN_SUFFIXES'),
       settingApi.get('TURNSTILE_ENABLED'),
       settingApi.get('TURNSTILE_SITE_KEY'),
@@ -63,8 +66,7 @@ onMounted(async () => {
       settingApi.get('FROM_EMAIL')
     ])
 
-    if (secretId.success && secretId.data) dnspodSecretId.value = secretId.data.value
-    if (secretKey.success && secretKey.data) dnspodSecretKey.value = secretKey.data.value
+    if (token.success && token.data) dnspodToken.value = token.data.value
     if (suffixes.success && suffixes.data) domainSuffixes.value = suffixes.data.value
     if (turnstileEn.success && turnstileEn.data) turnstileEnabled.value = turnstileEn.data.value !== 'false' && turnstileEn.data.value !== '0'
     if (turnstileSite.success && turnstileSite.data) turnstileSiteKey.value = turnstileSite.data.value
@@ -87,8 +89,7 @@ async function handleSaveDns() {
   dnsSaved.value = false
   try {
     await Promise.all([
-      settingApi.set('DNSPOD_SECRET_ID', dnspodSecretId.value),
-      settingApi.set('DNSPOD_SECRET_KEY', dnspodSecretKey.value),
+      settingApi.set('DNSPOD_TOKEN', dnspodToken.value),
       settingApi.set('DOMAIN_SUFFIXES', domainSuffixes.value)
     ])
     dnsSaved.value = true
@@ -97,6 +98,25 @@ async function handleSaveDns() {
     dnsError.value = t('admin.settings.saveFailed')
   } finally {
     dnsLoading.value = false
+  }
+}
+
+async function handleTestDnspod() {
+  dnsTestLoading.value = true
+  dnsTestResult.value = null
+  try {
+    // First save the token
+    await settingApi.set('DNSPOD_TOKEN', dnspodToken.value)
+    const response = await fetch('/api/settings/test-dnspod', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+    const result = await response.json()
+    dnsTestResult.value = result
+  } catch (e: any) {
+    dnsTestResult.value = { success: false, message: e.message }
+  } finally {
+    dnsTestLoading.value = false
   }
 }
 
@@ -120,6 +140,28 @@ async function handleSaveTurnstile() {
   }
 }
 
+async function handleTestTurnstile() {
+  turnstileTestLoading.value = true
+  turnstileTestResult.value = null
+  try {
+    await Promise.all([
+      settingApi.set('TURNSTILE_ENABLED', turnstileEnabled.value ? 'true' : 'false'),
+      settingApi.set('TURNSTILE_SITE_KEY', turnstileSiteKey.value),
+      settingApi.set('TURNSTILE_SECRET_KEY', turnstileSecretKey.value)
+    ])
+    const response = await fetch('/api/settings/test-turnstile', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+    const result = await response.json()
+    turnstileTestResult.value = result
+  } catch (e: any) {
+    turnstileTestResult.value = { success: false, message: e.message }
+  } finally {
+    turnstileTestLoading.value = false
+  }
+}
+
 // Email handlers
 async function handleSaveEmail() {
   emailLoading.value = true
@@ -138,6 +180,27 @@ async function handleSaveEmail() {
     emailError.value = t('admin.settings.saveFailed')
   } finally {
     emailLoading.value = false
+  }
+}
+
+async function handleTestResend() {
+  emailTestLoading.value = true
+  emailTestResult.value = null
+  try {
+    await Promise.all([
+      settingApi.set('RESEND_API_KEY', resendApiKey.value),
+      settingApi.set('RESEND_DOMAIN', resendDomain.value)
+    ])
+    const response = await fetch('/api/settings/test-resend', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+    })
+    const result = await response.json()
+    emailTestResult.value = result
+  } catch (e: any) {
+    emailTestResult.value = { success: false, message: e.message }
+  } finally {
+    emailTestLoading.value = false
   }
 }
 </script>
@@ -159,20 +222,12 @@ async function handleSaveEmail() {
 
         <div class="form-stack">
           <div class="field-group">
-            <label class="field-label">{{ t('admin.settings.dnspodSecretId') }}</label>
+            <label class="field-label">{{ t('admin.settings.dnspodToken') }}</label>
             <p class="field-desc">{{ t('admin.settings.dnspodDesc') }}</p>
             <InputField
-              v-model="dnspodSecretId"
-              placeholder="AKIDxxxxxxxxxxxxxxxxxxxxx"
-            />
-          </div>
-
-          <div class="field-group">
-            <label class="field-label">{{ t('admin.settings.dnspodSecretKey') }}</label>
-            <InputField
-              v-model="dnspodSecretKey"
+              v-model="dnspodToken"
               type="password"
-              placeholder="xxxxxxxxxxxxxxxxxxxxx"
+              placeholder="12345,abcdefgh1234567890..."
             />
           </div>
 
@@ -190,7 +245,14 @@ async function handleSaveEmail() {
         <p v-if="dnsError" class="error-text">{{ dnsError }}</p>
         <p v-if="dnsSaved" class="success-text">{{ t('admin.settings.settingsSaved') }}</p>
 
+        <div v-if="dnsTestResult" :class="['test-result', dnsTestResult.success ? 'success' : 'error']">
+          {{ dnsTestResult.message }}
+        </div>
+
         <div class="card-actions">
+          <Button variant="secondary" @click="handleTestDnspod" :loading="dnsTestLoading">
+            {{ t('common.test') }}
+          </Button>
           <Button @click="handleSaveDns" :loading="dnsLoading" :disabled="dnsSaved">
             {{ t('common.save') }}
           </Button>
@@ -225,7 +287,14 @@ async function handleSaveEmail() {
         <p v-if="turnstileError" class="error-text">{{ turnstileError }}</p>
         <p v-if="turnstileSaved" class="success-text">{{ t('admin.settings.settingsSaved') }}</p>
 
+        <div v-if="turnstileTestResult" :class="['test-result', turnstileTestResult.success ? 'success' : 'error']">
+          {{ turnstileTestResult.message }}
+        </div>
+
         <div class="card-actions">
+          <Button variant="secondary" @click="handleTestTurnstile" :loading="turnstileTestLoading">
+            {{ t('common.test') }}
+          </Button>
           <Button @click="handleSaveTurnstile" :loading="turnstileLoading" :disabled="turnstileSaved">
             {{ t('common.save') }}
           </Button>
@@ -265,7 +334,14 @@ async function handleSaveEmail() {
         <p v-if="emailError" class="error-text">{{ emailError }}</p>
         <p v-if="emailSaved" class="success-text">{{ t('admin.settings.settingsSaved') }}</p>
 
+        <div v-if="emailTestResult" :class="['test-result', emailTestResult.success ? 'success' : 'error']">
+          {{ emailTestResult.message }}
+        </div>
+
         <div class="card-actions">
+          <Button variant="secondary" @click="handleTestResend" :loading="emailTestLoading">
+            {{ t('common.test') }}
+          </Button>
           <Button @click="handleSaveEmail" :loading="emailLoading" :disabled="emailSaved">
             {{ t('common.save') }}
           </Button>
@@ -378,6 +454,7 @@ async function handleSaveEmail() {
 .card-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 12px;
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
@@ -393,5 +470,22 @@ async function handleSaveEmail() {
   color: var(--color-accent);
   font-size: 14px;
   margin: 8px 0 0 0;
+}
+
+.test-result {
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+.test-result.success {
+  background: rgba(0, 212, 170, 0.1);
+  color: var(--color-accent);
+}
+
+.test-result.error {
+  background: rgba(255, 107, 107, 0.1);
+  color: var(--color-danger);
 }
 </style>

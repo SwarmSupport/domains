@@ -72,20 +72,25 @@ async function handleAddDomain() {
     addError.value = t('domains.enterDomain')
     return
   }
-  if (!newPurpose.value || newPurpose.value.trim().length === 0) {
+  // Purpose is only required for non-admin users
+  const isAdmin = authStore.user?.role === 'admin'
+  if (!isAdmin && (!newPurpose.value || newPurpose.value.trim().length === 0)) {
     addError.value = t('domains.purposeRequired')
     return
   }
   // Combine subdomain and suffix (e.g., "mysite" + "example.com" = "mysite.example.com")
   const fullDomain = `${newSubdomain.value}.${selectedSuffix.value}`
-  const success = await domainStore.createDomain(fullDomain, newPurpose.value)
-  if (success) {
-    showAddModal.value = false
-    newSubdomain.value = ''
-    selectedSuffix.value = ''
-    newPurpose.value = ''
-  } else {
-    addError.value = t('domains.addFailed')
+  try {
+    const success = await domainStore.createDomain(fullDomain, newPurpose.value)
+    if (success) {
+      showAddModal.value = false
+      newSubdomain.value = ''
+      selectedSuffix.value = ''
+      newPurpose.value = ''
+    }
+  } catch (error: any) {
+    // Show the actual error message from the API
+    addError.value = error?.response?.data?.error || t('domains.addFailed')
   }
 }
 
@@ -139,9 +144,6 @@ async function handleDelete(id: number) {
         </div>
         <h3 class="domain-name">{{ domain.name }}</h3>
         <p class="domain-meta">{{ t('domains.expiresAt') }}: {{ new Date(domain.expires_at).toLocaleDateString() }}</p>
-        <div v-if="domain.purpose" class="domain-purpose">
-          <strong>{{ t('domains.purpose') }}:</strong> {{ domain.purpose }}
-        </div>
         <div v-if="domain.status === 'rejected' && domain.rejection_reason" class="domain-rejection">
           <strong>{{ t('domains.rejectionReason') }}:</strong> {{ domain.rejection_reason }}
         </div>
@@ -174,6 +176,7 @@ async function handleDelete(id: number) {
           <span class="preview-value">{{ newSubdomain }}.{{ selectedSuffix }}</span>
         </div>
         <InputField
+          v-if="authStore.user?.role !== 'admin'"
           v-model="newPurpose"
           :label="t('domains.domainPurpose')"
           :placeholder="t('domains.purposePlaceholder')"
@@ -321,15 +324,6 @@ async function handleDelete(id: number) {
 }
 
 .domain-meta {
-  font-size: 14px;
-  color: var(--color-text-secondary);
-}
-
-.domain-purpose {
-  margin-top: 12px;
-  padding: 12px;
-  background: rgba(0, 212, 170, 0.05);
-  border-radius: var(--radius-sm);
   font-size: 14px;
   color: var(--color-text-secondary);
 }

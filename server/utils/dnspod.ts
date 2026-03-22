@@ -34,12 +34,63 @@ function getCredentials(): DnspodCredentials | null {
   return { secretId, secretKey }
 }
 
-// Simple HMAC-SHA256 signature for DNSPod API
-function hmacSha256(secretKey: string, msg: string): string {
-  return crypto.createHmac('sha256', secretKey).update(msg, 'utf8').digest('hex')
+// Tencent Cloud API v3.0 Signature
+function getSignature(
+  method: string,
+  endpoint: string,
+  action: string,
+  payload: Record<string, any>,
+  secretId: string,
+  secretKey: string
+): string {
+  const service = 'dnspod'
+  const host = 'dnspod.tencentcloudapi.com'
+  const region = 'ap-guangzhou'
+  const version = DNSPOD_API_VERSION
+  const algorithm = 'TC3-HMAC-SHA256'
+  const timestamp = Math.floor(Date.now() / 1000)
+  const date = new Date(timestamp * 1000).toISOString().substr(0, 10)
+
+  // Step 1: Build canonical request string
+  const httpRequestMethod = method
+  const canonicalUri = '/'
+  const canonicalQueryString = ''
+  const contentType = 'application/json; charset=utf-8'
+  const canonicalHeaders = `content-type:${contentType}
+host:${host}
+x-tc-action:${action.toLowerCase()}
+`
+  const signedHeaders = 'content-type;host;x-tc-action'
+
+  const hashedRequestPayload = crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex')
+  const canonicalRequest = `${httpRequestMethod}
+${canonicalUri}
+${canonicalQueryString}
+${canonicalHeaders}
+${signedHeaders}
+${hashedRequestPayload}`
+
+  // Step 2: Build string to sign
+  const credentialScope = `${date}/${service}/tc3_request`
+  const hashedCanonicalRequest = crypto.createHash('sha256').update(canonicalRequest).digest('hex')
+  const stringToSign = `${algorithm}
+${timestamp}
+${credentialScope}
+${hashedCanonicalRequest}`
+
+  // Step 3: Calculate signature
+  const secretDate = crypto.createHmac('sha256', `TC3${secretKey}`).update(date).digest()
+  const secretService = crypto.createHmac('sha256', secretDate).update(service).digest()
+  const secretSigning = crypto.createHmac('sha256', secretService).update('tc3_request').digest()
+  const signature = crypto.createHmac('sha256', secretSigning).update(stringToSign).digest('hex')
+
+  // Step 4: Build authorization
+  const authorization = `${algorithm} Credential=${secretId}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
+
+  return authorization
 }
 
-// Tencent Cloud API v3 signature (simplified for DNSPod)
+// Tencent Cloud API v3 signature
 async function dnspodRequest(action: string, payload: Record<string, any>) {
   const credentials = getCredentials()
   if (!credentials) {
@@ -47,53 +98,27 @@ async function dnspodRequest(action: string, payload: Record<string, any>) {
   }
 
   const { secretId, secretKey } = credentials
-  const timestamp = Math.floor(Date.now() / 1000)
-  const nonce = String(Math.floor(Math.random() * 1000000))
+  const endpoint = 'dnspod.tencentcloudapi.com'
 
-  // Build the request body (sorted alphabetically by key)
-  const bodyMap: Record<string, string> = {
-    Action: action,
-    Version: DNSPOD_API_VERSION,
-    Timestamp: String(timestamp),
-    Nonce: nonce,
-    SecretId: secretId
+  // Get signature
+  const authorization = getSignature('POST', endpoint, action, payload, secretId, secretKey)
+
+  // Build request headers
+  const headers = {
+    'Authorization': authorization,
+    'Content-Type': 'application/json; charset=utf-8',
+    'Host': endpoint,
+    'X-TC-Action': action,
+    'X-TC-Timestamp': Math.floor(Date.now() / 1000).toString(),
+    'X-TC-Version': DNSPOD_API_VERSION,
+    'X-TC-Region': 'ap-guangzhou'
   }
 
-  // Add payload parameters
-  for (const [key, value] of Object.entries(payload)) {
-    bodyMap[key] = String(value)
-  }
-
-  // Sort keys alphabetically
-  const sortedKeys = Object.keys(bodyMap).sort()
-
-  // Build canonical string: sorted key=value pairs joined by &
-  // For signature, use the values directly without URL encoding
-  const canonicalStr = sortedKeys.map(key => `${key}=${bodyMap[key]}`).join('&')
-
-  // Calculate signature using HMAC-SHA256
-  const signature = hmacSha256(secretKey, canonicalStr)
-
-  // Build form-urlencoded body with signature
-  const bodyParts: string[] = []
-  for (const key of sortedKeys) {
-    bodyParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(bodyMap[key])}`)
-  }
-  // Add signature
-  bodyParts.push(`${encodeURIComponent('Signature')}=${encodeURIComponent(signature)}`)
-
-  const requestBody = bodyParts.join('&')
-
-  console.log('DNSPod Request URL:', DNSPOD_API_BASE)
-  console.log('DNSPod Request Body:', requestBody)
-  console.log('DNSPod Canonical String:', canonicalStr)
+  console.log('DNSPod Request URL:', `https://${endpoint}`)
+  console.log('DNSPod Request Payload:', JSON.stringify(payload))
 
   try {
-    const response = await axios.post(DNSPOD_API_BASE, requestBody, {
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      }
-    })
+    const response = await axios.post(`https://${endpoint}`, payload, { headers })
 
     console.log('DNSPod Response:', JSON.stringify(response.data).substring(0, 500))
 

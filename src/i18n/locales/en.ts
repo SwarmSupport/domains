@@ -17,7 +17,18 @@ export default {
     error: 'Error',
     warning: 'Warning',
     retry: 'Retry',
-    test: 'Test Connection'
+    test: 'Test Connection',
+    // Server errors
+    serverError: 'Server error. Please try again later.',
+    networkError: 'Network error. Please check your connection.',
+    unauthorized: 'Unauthorized. Please log in again.',
+    forbidden: 'You do not have permission to perform this action.',
+    notFound: 'The requested resource was not found.',
+    rateLimited: 'Too many requests. Please try again later.',
+    validationError: 'Input validation failed.',
+    // Language
+    language: 'Language',
+    switchLanguage: 'Switch Language'
   },
   nav: {
     dashboard: 'Dashboard',
@@ -95,7 +106,14 @@ export default {
     reject: 'Reject',
     rejectionReason: 'Rejection Reason',
     enterRejectionReason: 'Enter reason for rejection (optional)',
-    suffixRequired: 'Please select a TLD'
+    suffixRequired: 'Please select a TLD',
+    // Validation errors
+    validation: {
+      invalidSubdomain: 'Invalid subdomain format',
+      subdomainTooLong: 'Subdomain is too long',
+      invalidCharacters: 'Subdomain contains invalid characters',
+      suffixNotAllowed: 'This TLD is not available for registration'
+    }
   },
   dns: {
     title: 'DNS Records',
@@ -114,7 +132,35 @@ export default {
     addRecordTitle: 'Add DNS Record',
     editRecordTitle: 'Edit DNS Record',
     selectType: 'Select record type',
-    deleteRecordConfirm: 'Are you sure you want to delete this DNS record?'
+    deleteRecordConfirm: 'Are you sure you want to delete this DNS record?',
+    // Validation errors
+    validation: {
+      invalidRecordType: 'Invalid record type',
+      invalidIpv4: 'Invalid IPv4 address format',
+      invalidIpv6: 'Invalid IPv6 address format',
+      invalidDomain: 'Invalid domain name format',
+      ttlOutOfRange: 'TTL must be between 1 and 86400 seconds',
+      invalidPriority: 'Priority must be a non-negative number',
+      txtTooLong: 'TXT record value is too long (max 255 characters)',
+      invalidCaaFormat: 'Invalid CAA record format'
+    },
+    // Record type descriptions
+    recordTypes: {
+      A: 'A - Point domain to an IPv4 address',
+      AAAA: 'AAAA - Point domain to an IPv6 address',
+      CNAME: 'CNAME - Point domain to another domain',
+      MX: 'MX - Mail exchange server',
+      TXT: 'TXT - Text record, commonly used for verification and SPF',
+      NS: 'NS - Delegate DNS server',
+      SRV: 'SRV - Service locator',
+      CAA: 'CAA - Certificate Authority Authorization',
+      DS: 'DS - Delegation Signer',
+      NAPTR: 'NAPTR - Naming Authority Pointer',
+      PTR: 'PTR - Reverse DNS lookup',
+      SSHFP: 'SSHFP - SSH fingerprint record',
+      TLSA: 'TLSA - TLSA certificate association',
+      URI: 'URI - URI record'
+    }
   },
   admin: {
     users: {

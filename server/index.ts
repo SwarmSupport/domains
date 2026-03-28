@@ -8,9 +8,24 @@ import dnsRoutes from './routes/dns'
 import settingRoutes from './routes/settings'
 import emailRoutes from './routes/email'
 
+// Global error handlers to prevent silent crashes
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err)
+  process.exit(1)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+})
+
 const app = express()
 const PORT = process.env.PORT || 3000
 const IS_PRODUCTION = process.env.NODE_ENV === 'production'
+
+// Keep the process alive
+process.stdin.resume()
+
+console.log('[Server] Starting initialization...')
 
 // Trust proxy for correct IP detection
 app.set('trust proxy', 1)
@@ -147,7 +162,42 @@ app.get('/api/health', (req, res) => {
   res.json({ success: true, message: 'Server is running', timestamp: new Date().toISOString() })
 })
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`)
   console.log(`Environment: ${IS_PRODUCTION ? 'production' : 'development'}`)
 })
+
+// Handle server errors
+server.on('error', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Please stop the other server or use a different port.`)
+    console.error('You can kill the process using: npx kill-port 3000')
+  } else if (err.code === 'EACCES') {
+    console.error(`Permission denied to use port ${PORT}. Try using a port above 1024.`)
+  } else {
+    console.error('Server error:', err)
+  }
+  process.exit(1)
+})
+
+// Keep process alive
+process.stdin.on('data', () => {})
+
+// Handle graceful shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully')
+  server.close(() => {
+    console.log('Server closed')
+    process.exit(0)
+  })
+})
+
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully')
+  server.close(() => {
+    console.log('Server closed')
+    process.exit(0)
+  })
+})
+
+console.log('[Server] Server is ready and listening')

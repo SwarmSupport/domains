@@ -155,10 +155,26 @@ async function findDomainInDnspod(domainName: string): Promise<DnspodDomain | nu
 
   try {
     const listResult = await dnspodRequest('Domain.List', {})
-    const domain = listResult.domains?.find((d: any) => d.name.toLowerCase() === domainName.toLowerCase()) || null
+
+    // Log the response for debugging
+    console.log('[DNSPod] Domain.List response:', JSON.stringify(listResult).slice(0, 500))
+
+    if (!listResult.domains || !Array.isArray(listResult.domains)) {
+      console.error('[DNSPod] No domains returned or invalid response format')
+      domainCache.set(domainName.toLowerCase(), { domain: null, timestamp: now })
+      return null
+    }
+
+    const domain = listResult.domains.find((d: any) => d.name.toLowerCase() === domainName.toLowerCase()) || null
+
+    if (!domain) {
+      console.error('[DNSPod] Domain not found:', domainName, 'Available domains:', listResult.domains.map((d: any) => d.name))
+    }
+
     domainCache.set(domainName.toLowerCase(), { domain, timestamp: now })
     return domain
-  } catch {
+  } catch (error: any) {
+    console.error('[DNSPod] Failed to fetch domains:', error.message)
     domainCache.set(domainName.toLowerCase(), { domain: null, timestamp: now })
     return null
   }
@@ -347,13 +363,18 @@ export async function createRecord(
     }
 
     const { parentDomain, subDomain } = domainInfo
+    console.log('[DNSPod] Creating record - parentDomain:', parentDomain, 'subDomain:', subDomain, 'recordName:', record.name)
+
     const domain = await findDomainInDnspod(parentDomain)
     if (!domain) {
       console.error('Parent domain not found in DNSPod:', parentDomain)
       return null
     }
 
+    console.log('[DNSPod] Found domain in DNSPod:', domain.id, domain.name)
+
     const recordName = buildRecordName(subDomain, record.name)
+    console.log('[DNSPod] Calling Record.Create with:', { domain_id: domain.id, sub_domain: recordName, record_type: record.type, value: record.value, priority: record.priority, ttl: record.ttl })
 
     const result = await dnspodRequest('Record.Create', {
       domain_id: domain.id,
@@ -361,10 +382,20 @@ export async function createRecord(
       record_type: record.type,
       value: record.value,
       priority: record.priority,
-      ttl: record.ttl
+      ttl: record.ttl,
+      record_line: 'default' // DNSPod International API uses English line names
     })
 
-    return result.record?.id || null
+    console.log('[DNSPod] Record.Create response:', JSON.stringify(result))
+
+    // DNSPod API returns record.id in the response
+    const recordId = result.record?.id
+    if (!recordId) {
+      console.error('[DNSPod] Record.Create did not return record ID. Response:', result)
+      return null
+    }
+
+    return recordId
   } catch (error: any) {
     console.error('Failed to create record in DNSPod:', error.message)
     return null
@@ -397,7 +428,8 @@ export async function updateRecord(
       record_type: record.type,
       value: record.value,
       priority: record.priority,
-      ttl: record.ttl
+      ttl: record.ttl,
+      record_line: 'default'
     })
     return true
   } catch (error: any) {

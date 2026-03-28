@@ -17,7 +17,18 @@ export default {
     error: '错误',
     warning: '警告',
     retry: '重试',
-    test: '测试连接'
+    test: '测试连接',
+    // Server errors
+    serverError: '服务器错误，请稍后重试',
+    networkError: '网络错误，请检查您的连接',
+    unauthorized: '未授权，请重新登录',
+    forbidden: '您没有权限执行此操作',
+    notFound: '请求的资源不存在',
+    rateLimited: '请求过于频繁，请稍后再试',
+    validationError: '输入数据验证失败',
+    // Language
+    language: '语言',
+    switchLanguage: '切换语言'
   },
   nav: {
     dashboard: '控制台',
@@ -95,7 +106,14 @@ export default {
     reject: '拒绝',
     rejectionReason: '拒绝原因',
     enterRejectionReason: '输入拒绝原因（选填）',
-    suffixRequired: '请选择一个顶级域名'
+    suffixRequired: '请选择一个顶级域名',
+    // Validation errors
+    validation: {
+      invalidSubdomain: '无效的子域名格式',
+      subdomainTooLong: '子域名过长',
+      invalidCharacters: '子域名包含无效字符',
+      suffixNotAllowed: '该顶级域名不允许注册'
+    }
   },
   dns: {
     title: 'DNS 解析',
@@ -114,7 +132,35 @@ export default {
     addRecordTitle: '添加解析记录',
     editRecordTitle: '编辑解析记录',
     selectType: '选择记录类型',
-    deleteRecordConfirm: '确定要删除这条解析记录吗？'
+    deleteRecordConfirm: '确定要删除这条解析记录吗？',
+    // Validation errors
+    validation: {
+      invalidRecordType: '无效的记录类型',
+      invalidIpv4: '无效的 IPv4 地址格式',
+      invalidIpv6: '无效的 IPv6 地址格式',
+      invalidDomain: '无效的域名格式',
+      ttlOutOfRange: 'TTL 必须在 1-86400 秒之间',
+      invalidPriority: '优先级必须是非负数',
+      txtTooLong: 'TXT 记录值过长（最大 255 个字符）',
+      invalidCaaFormat: '无效的 CAA 记录格式'
+    },
+    // Record type descriptions
+    recordTypes: {
+      A: 'A - 将域名指向 IPv4 地址',
+      AAAA: 'AAAA - 将域名指向 IPv6 地址',
+      CNAME: 'CNAME - 将域名指向另一个域名',
+      MX: 'MX - 设置邮件交换服务器',
+      TXT: 'TXT - 添加文本记录，常用于验证和 SPF',
+      NS: 'NS - 委托 DNS 服务器',
+      SRV: 'SRV - 指定服务端口',
+      CAA: 'CAA - 证书颁发机构授权',
+      DS: 'DS - 委托签名记录',
+      NAPTR: 'NAPTR - 命名权限指针',
+      PTR: 'PTR - 反向 DNS 查找',
+      SSHFP: 'SSHFP - SSH 指纹记录',
+      TLSA: 'TLSA - TLSA 证书关联',
+      URI: 'URI - URI 记录'
+    }
   },
   admin: {
     users: {

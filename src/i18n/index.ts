@@ -4,7 +4,7 @@ import en from './locales/en'
 
 // Detect browser language and default to English for unknown languages
 function getBrowserLocale(): string {
-  const browserLocale = navigator.language || (navigator as any).userLanguage || 'en'
+  const browserLocale = navigator.language || 'en'
   // Check if browser locale starts with 'zh'
   if (browserLocale.toLowerCase().startsWith('zh')) {
     return 'zh'

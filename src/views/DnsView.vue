@@ -62,7 +62,7 @@ function openEditModal(record: DnsRecord) {
 async function handleAddRecord() {
   addError.value = ''
   if (!form.value.name || !form.value.value) {
-    addError.value = 'Please fill in all required fields'
+    addError.value = t('dns.fillRequired')
     return
   }
   addLoading.value = true
@@ -73,7 +73,7 @@ async function handleAddRecord() {
       resetForm()
     }
   } catch (error: any) {
-    addError.value = error?.response?.data?.error || error.message || 'Failed to add record'
+    addError.value = error?.response?.data?.error || error.message || t('dns.addFailed')
   } finally {
     addLoading.value = false
   }
@@ -82,7 +82,7 @@ async function handleAddRecord() {
 async function handleUpdateRecord() {
   editError.value = ''
   if (!editingRecord.value || !form.value.name || !form.value.value) {
-    editError.value = 'Please fill in all required fields'
+    editError.value = t('dns.fillRequired')
     return
   }
   editLoading.value = true
@@ -94,7 +94,7 @@ async function handleUpdateRecord() {
       resetForm()
     }
   } catch (error: any) {
-    editError.value = error?.response?.data?.error || error.message || 'Failed to update record'
+    editError.value = error?.response?.data?.error || error.message || t('dns.updateFailed')
   } finally {
     editLoading.value = false
   }

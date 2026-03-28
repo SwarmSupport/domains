@@ -133,6 +133,9 @@ export default {
     editRecordTitle: '编辑解析记录',
     selectType: '选择记录类型',
     deleteRecordConfirm: '确定要删除这条解析记录吗？',
+    fillRequired: '请填写所有必填字段',
+    addFailed: '添加记录失败，请稍后重试。',
+    updateFailed: '更新记录失败，请稍后重试。',
     // Validation errors
     validation: {
       invalidRecordType: '无效的记录类型',

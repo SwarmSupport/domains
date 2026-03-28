@@ -23,6 +23,8 @@ const addError = ref('')
 const filter = ref<'all' | 'active' | 'pending' | 'rejected' | 'suspended'>('all')
 const availableSuffixes = ref<string[]>([])
 const isLoading = ref(true)
+const suffixesLoading = ref(false)
+const suffixesError = ref('')
 
 onMounted(async () => {
   // Wait for auth user to be loaded
@@ -32,13 +34,20 @@ onMounted(async () => {
   isLoading.value = false
   await domainStore.fetchDomains()
   // Fetch available domain suffixes
+  suffixesLoading.value = true
+  suffixesError.value = ''
   try {
     const { data } = await settingApi.get('DOMAIN_SUFFIXES')
     if (data.success && data.data?.value) {
       availableSuffixes.value = data.data.value.split('\n').map(s => s.trim()).filter(s => s.length > 0)
     }
-  } catch (e) {
-    console.error('Failed to load domain suffixes')
+  } catch (e: any) {
+    suffixesError.value = e.message || 'Failed to load domain options'
+    if (import.meta.env.DEV) {
+      console.error('Failed to load domain suffixes:', e.message)
+    }
+  } finally {
+    suffixesLoading.value = false
   }
 })
 
@@ -161,10 +170,13 @@ async function handleDelete(id: number) {
       <form @submit.prevent="handleAddDomain" class="add-form">
         <div class="suffix-select">
           <label>{{ t('domains.selectSuffix') }}</label>
-          <select v-model="selectedSuffix" class="select-field">
-            <option value="" disabled>{{ t('domains.selectSuffix') }}</option>
+          <select v-model="selectedSuffix" class="select-field" :disabled="suffixesLoading">
+            <option value="" disabled>
+              {{ suffixesLoading ? t('common.loading') : suffixesError ? t('common.error') : t('domains.selectSuffix') }}
+            </option>
             <option v-for="suffix in availableSuffixes" :key="suffix" :value="suffix">{{ suffix }}</option>
           </select>
+          <p v-if="suffixesError" class="suffix-error">{{ suffixesError }}</p>
         </div>
         <InputField
           v-model="newSubdomain"
@@ -379,6 +391,12 @@ async function handleDelete(id: number) {
 .suffix-select label {
   font-size: 14px;
   color: var(--color-text-secondary);
+}
+
+.suffix-error {
+  color: var(--color-danger);
+  font-size: 12px;
+  margin-top: 8px;
 }
 
 .select-field {

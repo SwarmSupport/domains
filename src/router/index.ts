@@ -69,9 +69,6 @@ const router = createRouter({
   ]
 })
 
-// Track if we're currently fetching user data during initialization
-let isFetchingUser = false
-
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
 
@@ -79,15 +76,14 @@ router.beforeEach(async (to, from, next) => {
   authStore.syncAuthState()
 
   // If logged in but user data not loaded yet, fetch it
-  // Use a flag to prevent multiple simultaneous fetches
-  if (authStore.isLoggedIn && !authStore.user && !isFetchingUser) {
-    isFetchingUser = true
+  // The store's fetchingUser flag prevents multiple simultaneous fetches
+  if (authStore.isLoggedIn && !authStore.user && !authStore.fetchingUser) {
     try {
       await authStore.fetchUser()
     } catch (error) {
-      console.warn('Failed to fetch user during navigation:', error)
-    } finally {
-      isFetchingUser = false
+      if (import.meta.env.DEV) {
+        console.warn('Failed to fetch user during navigation:', error)
+      }
     }
   }
 

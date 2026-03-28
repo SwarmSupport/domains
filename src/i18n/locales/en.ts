@@ -133,6 +133,9 @@ export default {
     editRecordTitle: 'Edit DNS Record',
     selectType: 'Select record type',
     deleteRecordConfirm: 'Are you sure you want to delete this DNS record?',
+    fillRequired: 'Please fill in all required fields',
+    addFailed: 'Failed to add record. Please try again later.',
+    updateFailed: 'Failed to update record. Please try again later.',
     // Validation errors
     validation: {
       invalidRecordType: 'Invalid record type',

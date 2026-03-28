@@ -124,7 +124,7 @@ function getUsername(userId: number | null) {
       </table>
     </Card>
 
-    <Card customClass="mt-4">
+    <Card>
       <template #header>
         <h3>{{ t('admin.domains.assignedDomains') }} ({{ assignedDomains.length }})</h3>
       </template>
@@ -155,7 +155,9 @@ function getUsername(userId: number | null) {
       </table>
     </Card>
 
-    <Card customClass="mt-4">
+    <div class="section-gap"></div>
+
+    <Card>
       <template #header>
         <h3>{{ t('admin.domains.suspendedDomains') }} ({{ suspendedDomains.length }})</h3>
       </template>
@@ -226,8 +228,8 @@ function getUsername(userId: number | null) {
   margin: 0 auto;
 }
 
-.mt-4 {
-  margin-top: 24px;
+.section-gap {
+  height: 24px;
 }
 
 .empty-state {

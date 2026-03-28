@@ -7,6 +7,7 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
   const token = ref<string | null>(localStorage.getItem('token'))
   const loading = ref(false)
+  const fetchingUser = ref(false)
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
@@ -48,7 +49,9 @@ export const useAuthStore = defineStore('auth', () => {
       if (error.response?.status === 403) {
         return { success: false, error: error.response?.data?.error || 'Account suspended' }
       }
-      console.error('Login error:', error)
+      if (import.meta.env.DEV) {
+        console.error('Login error:', error.message)
+      }
       return { success: false, error: error.message || 'Network error' }
     } finally {
       loading.value = false
@@ -69,9 +72,10 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function fetchUser() {
-    // If no token, do nothing
-    if (!token.value) return
+    // If no token or already fetching, do nothing
+    if (!token.value || fetchingUser.value) return fetchingUser.value ? null : false
 
+    fetchingUser.value = true
     try {
       const { data } = await authApi.getMe()
       if (data.success && data.data) {
@@ -87,15 +91,21 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (error: any) {
       // If 401, the token is invalid - clear everything
       if (error.response?.status === 401 || error.response?.status === 403) {
-        console.warn('Token invalid or expired')
+        if (import.meta.env.DEV) {
+          console.warn('Token invalid or expired')
+        }
         user.value = null
         token.value = null
         localStorage.removeItem('token')
       } else {
         // Network error or other error - keep user state but log warning
-        console.warn('Failed to fetch user:', error.message)
+        if (import.meta.env.DEV) {
+          console.warn('Failed to fetch user:', error.message)
+        }
       }
       return false
+    } finally {
+      fetchingUser.value = false
     }
   }
 
@@ -119,6 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     token,
     loading,
+    fetchingUser,
     isLoggedIn,
     isAdmin,
     isEmailVerified,

@@ -26,11 +26,19 @@ export const useDomainStore = defineStore('domains', () => {
 
   async function createDomain(name: string, purpose?: string) {
     loading.value = true
+    error.value = null
     try {
       const { data } = await domainApi.create(name, purpose)
       if (data.success && data.data) {
         domains.value.unshift(data.data)
         return true
+      }
+      error.value = data.error || 'Failed to create domain'
+      return false
+    } catch (e: any) {
+      error.value = e.message || 'Failed to create domain'
+      if (import.meta.env.DEV) {
+        console.error('Failed to create domain:', e.message)
       }
       return false
     } finally {
@@ -39,45 +47,64 @@ export const useDomainStore = defineStore('domains', () => {
   }
 
   async function deleteDomain(id: number) {
+    error.value = null
     try {
       const { data } = await domainApi.delete(id)
       if (data.success) {
         domains.value = domains.value.filter(d => d.id !== id)
         return true
       }
+      error.value = data.error || 'Failed to delete domain'
       return false
-    } catch {
+    } catch (e: any) {
+      error.value = e.message || 'Failed to delete domain'
+      if (import.meta.env.DEV) {
+        console.error('Failed to delete domain:', e.message)
+      }
       return false
     }
   }
 
   async function approveDomain(id: number, userId: number) {
+    error.value = null
     try {
       const { data } = await domainApi.approve(id, userId)
       if (data.success) {
         await fetchDomains()
         return true
       }
+      error.value = data.error || 'Failed to approve domain'
       return false
-    } catch {
+    } catch (e: any) {
+      error.value = e.message || 'Failed to approve domain'
+      if (import.meta.env.DEV) {
+        console.error('Failed to approve domain:', e.message)
+      }
       return false
     }
   }
 
   async function rejectDomain(id: number, reason?: string) {
+    error.value = null
     try {
       const { data } = await domainApi.reject(id, reason)
       if (data.success) {
         await fetchDomains()
         return true
       }
+      error.value = data.error || 'Failed to reject domain'
       return false
-    } catch {
+    } catch (e: any) {
+      error.value = e.message || 'Failed to reject domain'
+      if (import.meta.env.DEV) {
+        console.error('Failed to reject domain:', e.message)
+      }
       return false
     }
   }
 
   async function suspendDomain(id: number) {
+    error.value = null
     try {
       const { data } = await domainApi.suspend(id)
       if (data.success) {
@@ -87,13 +114,19 @@ export const useDomainStore = defineStore('domains', () => {
         }
         return true
       }
+      error.value = data.error || 'Failed to suspend domain'
       return false
-    } catch {
+    } catch (e: any) {
+      error.value = e.message || 'Failed to suspend domain'
+      if (import.meta.env.DEV) {
+        console.error('Failed to suspend domain:', e.message)
+      }
       return false
     }
   }
 
   async function resumeDomain(id: number) {
+    error.value = null
     try {
       const { data } = await domainApi.resume(id)
       if (data.success) {
@@ -103,21 +136,32 @@ export const useDomainStore = defineStore('domains', () => {
         }
         return true
       }
+      error.value = data.error || 'Failed to resume domain'
       return false
-    } catch {
+    } catch (e: any) {
+      error.value = e.message || 'Failed to resume domain'
+      if (import.meta.env.DEV) {
+        console.error('Failed to resume domain:', e.message)
+      }
       return false
     }
   }
 
   async function deleteFromDnspod(id: number) {
+    error.value = null
     try {
       const { data } = await domainApi.deleteFromDnspod(id)
       if (data.success) {
         domains.value = domains.value.filter(d => d.id !== id)
         return true
       }
+      error.value = data.error || 'Failed to delete domain from DNSPod'
       return false
-    } catch {
+    } catch (e: any) {
+      error.value = e.message || 'Failed to delete domain from DNSPod'
+      if (import.meta.env.DEV) {
+        console.error('Failed to delete domain from DNSPod:', e.message)
+      }
       return false
     }
   }
@@ -151,6 +195,7 @@ export const useDomainStore = defineStore('domains', () => {
   }
 
   async function updateRecord(domain: string, recordId: number, record: Partial<DnsRecord>) {
+    error.value = null
     try {
       const { data } = await dnsApi.updateRecord(domain, recordId, record)
       if (data.success && data.data) {
@@ -160,21 +205,32 @@ export const useDomainStore = defineStore('domains', () => {
         }
         return true
       }
+      error.value = data.error || 'Failed to update record'
       return false
-    } catch {
+    } catch (e: any) {
+      error.value = e.message || 'Failed to update record'
+      if (import.meta.env.DEV) {
+        console.error('Failed to update DNS record:', e.message)
+      }
       return false
     }
   }
 
   async function deleteRecord(domain: string, recordId: number) {
+    error.value = null
     try {
       const { data } = await dnsApi.deleteRecord(domain, recordId)
       if (data.success) {
         records.value = records.value.filter(r => r.id !== recordId)
         return true
       }
+      error.value = data.error || 'Failed to delete record'
       return false
-    } catch {
+    } catch (e: any) {
+      error.value = e.message || 'Failed to delete record'
+      if (import.meta.env.DEV) {
+        console.error('Failed to delete DNS record:', e.message)
+      }
       return false
     }
   }
